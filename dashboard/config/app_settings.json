@@ -1,0 +1,31 @@
+{
+  "defaultAgentId": "dev_assistant",
+  "defaultModel": "llama3.1:8b",
+  "activeDiscussionId": "disc-mthko2ytzf9exz",
+  "disableVersioning": false,
+  "behavior": {
+    "autoHi": true
+  },
+  "appearance": {
+    "theme": "dark",
+    "fontFamily": "",
+    "fontSize": 16
+  },
+  "chatTests": {
+    "enabled": true,
+    "tests": []
+  },
+  "dataDir": "E:\\data\\rag_store",
+  "ragDbPath": "E:\\data\\db",
+  "rag": {
+    "commitOnSave": false,
+    "autoIngest": true
+  },
+  "chatSavePath": "E:\\data\\rag_store\\chatlog\\agent-text-records",
+  "observe": {
+    "terminal": true,
+    "tools": false,
+    "messages": false,
+    "maxLines": 800
+  }
+}

@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime data
+data/
+
+# Logs & temp
+*.log
+*.tmp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
