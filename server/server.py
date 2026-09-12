@@ -532,6 +532,7 @@ async def get_app_settings():
     return {
         "settings": payload,
         "restartNeeded": paths.restart_needed(),
+        "platform": paths.platform(),
     }
 
 
@@ -563,7 +564,11 @@ def _resolve_chat_dir(raw_path: str) -> Path:
     - Absolute path -> kept only if it stays inside BASE_DIR; otherwise
       an absolute path is re-rooted under BASE_DIR (so a crafted value
       can never escape the project).
+
+    A Windows-style drive path (E:\\... ) has no meaning on Linux and is
+    treated as empty there (same rule as server/paths.py).
     """
+    raw_path = paths.os_text(raw_path)
     candidate = Path(raw_path or "")
 
     if not candidate.is_absolute():

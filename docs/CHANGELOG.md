@@ -3,6 +3,74 @@
 All notable changes to this project. Format based on Keep a Changelog
 (https://keepachangelog.com/), grouped by date.
 
+## 2026-09-12 — Cross-platform paths + resilient model selection
+
+The app now runs from the same checkout on both Windows and Linux, and never
+crashes on a model that this machine does not have installed.
+
+### Added — per-OS path overrides & platform detection
+
+- `server/paths.py` — reads three new keys from
+  `dashboard/config/app_settings.json`:
+  - `dataDirLinux`, `chatSavePathLinux`, `ragDbPathLinux` — on non-Windows
+    hosts these win over the plain `dataDir` / `chatSavePath` / `ragDbPath`,
+    so one settings file can carry both a Windows layout and a Linux layout.
+  - A plain value that is a Windows drive path (`E:\...` / `E:/...`) is
+    ignored on non-Windows hosts when no `<key>Linux` override exists — the
+    app falls back to a project default instead of creating a literal
+    `E:\data\...` folder on Linux.
+  - New `platform()` helper (`"win"` / `"nix"`); `about()` now reports it.
+- `server/server.py` — `GET /api/settings` returns `platform`; the legacy
+  `/api/chat-save` path resolver (`_resolve_chat_dir`) uses the same
+  Windows-drive-path guard so crafted values can never become literal folders
+  on Linux (already re-rooted inside `BASE_DIR`).
+- `dashboard/js/ui/config-form.js` — a "Linux paths (overrides)" section with
+  the three new fields is rendered on non-Windows machines and saved through
+  the existing `POST /api/settings` merge. `config-page.js`/`api.js` pass the
+  detected platform through.
+- `.gitignore` — `[A-Z]:*` rule so accidental drive-letter folders can never
+  be tracked.
+- Stray `E:\data\rag_store` folders created by the old resolution on Linux
+  were removed from the repo.
+
+### Added — resilient model selection
+
+- `engine/core/llm.py` — `_resolve_model()` no longer trusts a requested model
+  blindly:
+  - A model that is **not installed** on this machine is dropped with an
+    `[ask_llm]` warning and the first detected model is used instead (this is
+    what keeps Windows-authored settings working on a Linux/Chromebook Ollama
+    that lacks `llama3.1:8b` / `gemma4:e2b`).
+  - When the caller needs **tool calling**, models Ollama reports as not
+    supporting tools are skipped, preferring a `tools`-capable detected model.
+    `ask_llm()` only drops the tool schemas (the agent then answers without
+    tools) when no tool-capable model exists at all.
+  - Installed models and per-model capabilities are cached briefly so the
+    checks do not hammer Ollama on every message.
+  - When no models are visible at all (Ollama unreachable), the explicit
+    request is still honoured as before.
+- `dashboard/config/app_settings.json` — `defaultModel` is `""`: the app
+  resolves to the first detected model and the user chooses any detected LLM
+  from the dropdown (no hardcoded default).
+
+### Fixed — launching on Linux
+
+- README gained a "Quickstart (Linux / Chromebook Linux)" section
+  (`python3 -m venv venv`, `source venv/bin/activate`, ...) with the uvicorn
+  equivalent. Linux has no bare `python` binary, so `python server.py` only
+  works inside an activated venv — documented in Notes.
+
+### Documentation
+
+- `README.md` — Linux quickstart, "Model selection" subsection, per-OS paths
+  under RAG, `platform` note, updated "Recent changes".
+- `docs/documentation_CREATING_AGENTS.md` — stale pre-restructure paths
+  (`app/*`, root `agent_library/`) corrected to the `engine/`/`tools/` layout;
+  the `model` field now documents the fallback-to-detected behavior;
+  tool-using agents should pin a `tools`-capable model.
+- `docs/RESTRUCTURE_README.md` — Linux launch line and refreshed component
+  comments.
+
 ## 2026-09-12 — Agent Monitor removed; launch fixed; docs updated
 
 The Agent Monitoring feature (live activity feed) was removed and the affected

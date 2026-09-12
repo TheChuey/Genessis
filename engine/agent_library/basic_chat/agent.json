@@ -3,9 +3,6 @@
   "name": "Basic Chat",
   "description": "A simple chatbot with no tools.",
   "mode": "agent",
-  "model": "qwen2.5-coder:latest",
-  "tools": [
-    "map_files",
-    "read_file"
-  ]
+  "model": "llama3:latest",
+  "tools": []
 }

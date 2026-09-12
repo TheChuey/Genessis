@@ -1,10 +1,10 @@
 {
   "models": [
     {
-      "id": "llama3.1:8b",
-      "name": "llama3.1:8b",
+      "id": "llama3:latest",
+      "name": "llama3:latest",
       "source": "ollama",
-      "size": 4920753328
+      "size": 4661224676
     },
     {
       "id": "nomic-embed-text:latest",
@@ -13,16 +13,22 @@
       "size": 274302450
     },
     {
+      "id": "llama3.2:1b",
+      "name": "llama3.2:1b",
+      "source": "ollama",
+      "size": 1321098329
+    },
+    {
       "id": "qwen2.5-coder:latest",
       "name": "qwen2.5-coder:latest",
       "source": "ollama",
       "size": 4683087561
     },
     {
-      "id": "gemma4:e2b",
-      "name": "gemma4:e2b",
+      "id": "gemma4:e4b",
+      "name": "gemma4:e4b",
       "source": "ollama",
-      "size": 7162405886
+      "size": 9608350718
     }
   ]
 }

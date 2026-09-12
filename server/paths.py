@@ -16,6 +16,15 @@ page (config.html), stored in dashboard/config/app_settings.json via
                        Empty -> <dataDir>/rag_db
         rag            { commitOnSave: bool, autoIngest: bool }
 
+    Per-OS overrides (cross-platform installs):
+        <key>Linux    e.g. dataDirLinux / chatSavePathLinux / ragDbPathLinux.
+                       On non-Windows hosts these win over the plain key so
+                       one settings file can carry both a Windows layout and
+                       a Linux layout. A plain key that is a Windows drive
+                       path (D:\\... / D:/...) is ignored on Linux when no
+                       <key>Linux override exists - the app falls back to a
+                       project default instead of creating a literal folder.
+
 Everything else is derived from these so changing "data folder" moves the
 chatlog, transcripts, history, exports and RAG store together.
 
@@ -29,12 +38,17 @@ restart the server for dataDir/ragDbPath/chatSavePath changes to apply.
 """
 
 import json
+import os
+import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 APP_SETTINGS_FILE = BASE_DIR / "dashboard" / "config" / "app_settings.json"
 
 _EMPTY = (None, "", "")
+
+_IS_WINDOWS = os.name == "nt"
+_WIN_DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 def _get_text(value):
@@ -46,6 +60,37 @@ def _get_text(value):
 
 def _bool(value):
     return bool(value)
+
+
+def platform() -> str:
+    """'win' on Windows, 'nix' on every other host (Linux, macOS, ...) -
+    used by the dashboard to show the right path fields."""
+    return "win" if _IS_WINDOWS else "nix"
+
+
+def os_text(value):
+    """Public: normalize a raw path string for the current OS.
+
+    Returns '' when a Windows-only drive path (E:\\... / E:/...) is being
+    resolved on a non-Windows host, so it can never be turned into a
+    literal folder on Linux. On Windows the value is returned verbatim.
+    """
+    text = _get_text(value)
+    if not _IS_WINDOWS and text and _WIN_DRIVE_PATH.match(text):
+        return ""
+    return text
+
+
+def _os_value(cfg, key):
+    """Platform-aware value for one path setting.
+
+    On Windows the plain `key` value is used. On other hosts a `<key>Linux`
+    override wins; a Windows drive path with no Linux override returns ''
+    so callers fall back to a project default.
+    """
+    if _IS_WINDOWS:
+        return _get_text(cfg.get(key))
+    return os_text(cfg.get(f"{key}Linux") or cfg.get(key))
 
 
 def _load_app_settings() -> dict:
@@ -63,7 +108,7 @@ def resolve_path(raw, *fallback_parts) -> Path:
     relative paths resolve against the project root). When `raw` is empty,
     fall back to BASE_DIR/<fallback_parts>.
     """
-    text = _get_text(raw)
+    text = os_text(raw)
     if not text:
         return BASE_DIR.joinpath(*fallback_parts).resolve()
     path = Path(text).expanduser()
@@ -74,7 +119,7 @@ def resolve_path(raw, *fallback_parts) -> Path:
 
 def _rooted(raw, default: Path) -> Path:
     """Like resolve_path, but the fallback is an already-resolved Path."""
-    text = _get_text(raw)
+    text = os_text(raw)
     if not text:
         return default
     path = Path(text).expanduser()
@@ -92,19 +137,19 @@ _cfg = _load_app_settings()
 # Snapshot of the stored *path* settings at import. The UI can compare
 # against the live file to tell the user a restart is required.
 _PATH_KEYS = ("dataDir", "chatSavePath", "ragDbPath")
-_path_keys_at_import = {key: _get_text(_cfg.get(key)) for key in _PATH_KEYS}
+_path_keys_at_import = {key: _os_value(_cfg, key) for key in _PATH_KEYS}
 
-# Base data folder (dataDir overrides the default "data").
-DATA_DIR = resolve_path(_cfg.get("dataDir"), "data")
+# Base data folder (dataDir / dataDirLinux overrides the default "data").
+DATA_DIR = resolve_path(_os_value(_cfg, "dataDir"), "data")
 
 # Chat log folder + transcripts (chatSavePath overrides the sub-folder).
 CHATS_DIR = DATA_DIR / "chatlog"
-CHAT_SAVE_PATH = _get_text(_cfg.get("chatSavePath"))
+CHAT_SAVE_PATH = _os_value(_cfg, "chatSavePath")
 RECORDS_DIR = _rooted(CHAT_SAVE_PATH, DATA_DIR / "chatlog" / "agent-text-records")
 CHAT_RECORDS_DIR = RECORDS_DIR  # alias used by the RAG search tool
 
 # RAG store (ragDbPath overrides <dataDir>/rag_db).
-RAG_DB_DIR = _rooted(_cfg.get("ragDbPath"), DATA_DIR / "rag_db")
+RAG_DB_DIR = _rooted(_os_value(_cfg, "ragDbPath"), DATA_DIR / "rag_db")
 
 # Chat log metadata + active session.
 LOG_FILE = CHATS_DIR / "chatRecord.jsonl"
@@ -140,7 +185,7 @@ def restart_needed() -> bool:
     server is still using the old resolved locations until a restart."""
     current = _load_app_settings()
     for key in _PATH_KEYS:
-        if _get_text(current.get(key)) != _path_keys_at_import.get(key):
+        if _os_value(current, key) != _path_keys_at_import.get(key):
             return True
     return False
 
@@ -149,6 +194,7 @@ def about() -> dict:
     """Human-readable summary of the resolved locations (for the config UI
     and the /api/rag/status endpoint)."""
     return {
+        "platform": platform(),
         "data_dir": str(DATA_DIR),
         "chat_records_dir": str(RECORDS_DIR),
         "chat_log_file": str(LOG_FILE),

@@ -14,7 +14,7 @@
  * @param {object} opts.settings   - stored app settings
  * @returns {{ root: HTMLElement, values: () => object }}
  */
-export function buildConfigForm({ agents = [], models = [], settings = {} }) {
+export function buildConfigForm({ agents = [], models = [], settings = {}, platform = "nix" }) {
     const root = document.createElement("div");
     root.className = "panel";
 
@@ -65,6 +65,39 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
         settings.ragDbPath || ""
     ));
 
+    // ---- Linux overrides (shown on non-Windows hosts) ----
+    // The same three settings can carry a second, Linux-specific layout so
+    // one app_settings.json works on both Windows and Linux. Windows-style
+    // drive paths in the plain fields are ignored on Linux when no override
+    // is set - the app falls back to a project default instead.
+    if (platform !== "win") {
+        const linuxHeading = document.createElement("h3");
+        linuxHeading.className = "config-section-heading";
+        linuxHeading.textContent = "Linux paths (overrides)";
+        root.appendChild(linuxHeading);
+
+        root.appendChild(fieldTextInput(
+            "data-dir-path-linux",
+            "Data folder (Linux)",
+            "Used instead of the Data folder value above when running on Linux. Blank = project default (data/). Windows-only paths in the fields above are ignored on Linux.",
+            settings.dataDirLinux || ""
+        ));
+
+        root.appendChild(fieldTextInput(
+            "chat-save-path-linux",
+            "Chat save path (Linux)",
+            "Where saved chat transcripts (.txt) are written on Linux. Blank = <linux data folder>/chatlog/agent-text-records.",
+            settings.chatSavePathLinux || ""
+        ));
+
+        root.appendChild(fieldTextInput(
+            "rag-db-path-linux",
+            "RAG database path (Linux)",
+            "Folder for the RAG memory store (chroma.sqlite3) on Linux. Blank = <linux data folder>/rag_db.",
+            settings.ragDbPathLinux || ""
+        ));
+    }
+
     // ---- Chat versioning toggle ----
     const versionField = document.createElement("label");
     versionField.className = "field field-toggle";
@@ -112,7 +145,7 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
     return {
         root,
         values() {
-            return {
+            const values = {
                 defaultAgentId: byId("default-agent-select").value,
                 defaultModel: byId("default-model-select").value,
                 chatSavePath: byId("chat-save-path").value.trim(),
@@ -124,6 +157,12 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
                     autoIngest: byId("rag-auto-ingest").checked,
                 },
             };
+            if (platform !== "win") {
+                values.dataDirLinux = byId("data-dir-path-linux").value.trim();
+                values.chatSavePathLinux = byId("chat-save-path-linux").value.trim();
+                values.ragDbPathLinux = byId("rag-db-path-linux").value.trim();
+            }
+            return values;
         },
     };
 }

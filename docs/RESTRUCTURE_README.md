@@ -9,7 +9,8 @@ terminator1/
 ├── engine/                 # The agent factory ("engine")
 │   ├── core/
 │   │   ├── agent.py        # Agent runtime: think/act/observe loop
-│   │   ├── llm.py          # ask_llm(), model resolution, Ollama scan
+│   │   ├── llm.py          # ask_llm(), model resolution (falls back to a
+│   │   │                   # detected model; prefers tools-capable), Ollama scan
 │   │   └── prompt.py       # agent.md sections + tools -> system prompt
 │   ├── agents/
 │   │   ├── loader.py       # Reads agent_library/{id}/agent.md + agent.json
@@ -51,7 +52,9 @@ terminator1/
 │
 ├── server/                  # Thin glue: FastAPI app + chat log + path config
 │   ├── server.py            # HTTP endpoints, static mount, lifespan
-│   ├── paths.py             # Config-driven runtime path authority
+│   ├── paths.py             # Config-driven runtime path authority (dataDir /
+│   │                         # chatSavePath / ragDbPath, incl. per-OS *Linux
+│   │                         # overrides)
 │   └── chat_store/
 │       ├── logger.py
 │       └── store.py
@@ -82,12 +85,21 @@ top of the file adds the project root and drops the script's own folder so the
 `server` package is never shadowed). Equivalent launch from the project root:
 
 ```
+# Windows
 venv\Scripts\python -m uvicorn server.server:app
+
+# Linux
+venv/bin/python -m uvicorn server.server:app
 ```
 
 > The Agent Monitor feature (`dashboard/monitor.html`, `dashboard/js/monitor.js`,
 > `server/activity.py` and the `/api/activity*` endpoints) was removed in
 > 2026-09-12. See `docs/CHANGELOG.md`.
+
+> Since 2026-09-12 the app also runs cross-platform: per-OS path overrides
+> (`dataDirLinux` / `chatSavePathLinux` / `ragDbPathLinux`) keep one settings
+> file working on Windows and Linux, and `engine/core/llm.py` falls back to a
+> detected model when a requested one is not installed. See `docs/CHANGELOG.md`.
 
 ## What changed under the hood
 

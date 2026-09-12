@@ -47,12 +47,28 @@ python -m pip install -r requirements.txt
 python server.py
 ```
 
+## Quickstart (Linux / Chromebook Linux)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -r requirements.txt
+python server.py
+```
+
 `python server.py` can be run from ANY directory — the project root or
 `server/` both work (the file bootstraps `sys.path` itself). Override the port
-with `$env:PORT=9000`. The equivalent uvicorn launch (from the project root):
+with `$env:PORT=9000` (PowerShell) or `PORT=9000 python server.py` (Linux).
+The equivalent uvicorn launch (from the project root):
 
 ```powershell
 venv\Scripts\python -m uvicorn server.server:app --host 127.0.0.1 --port 8000
+```
+
+Linux uses the same package layout in the venv, so the equivalent is:
+
+```bash
+venv/bin/python -m uvicorn server.server:app --host 127.0.0.1 --port 8000
 ```
 
 Open **http://127.0.0.1:8000** (Chrome/Edge).
@@ -66,7 +82,8 @@ terminator1/
 │   │                         # thing the browser talks to. `python server.py`
 │   │                         # runs from any directory.
 │   ├── paths.py              # Config-driven runtime path authority: dataDir /
-│   │                         # chatSavePath / ragDbPath / RAG switches.
+│   │                         # chatSavePath / ragDbPath (incl. per-OS
+│   │                         # *Linux overrides) / RAG switches.
 │   └── chat_store/           # Server-side chat session + chat log
 │       ├── store.py          # ensure_session / append_turn / finalize_session,
 │       │                     # the one-active-chat state, .txt transcripts,
@@ -76,7 +93,8 @@ terminator1/
 ├── engine/                   # The agent engine
 │   ├── core/
 │   │   ├── agent.py          # AgentProfile + the reusable Agent: think/act/observe
-│   │   ├── llm.py            # ask_llm(), model resolution, context window, Ollama scan
+│   │   ├── llm.py            # ask_llm(), model resolution (fallback to a
+│   │   │                     # detected model), context window, Ollama scan
 │   │   └── prompt.py         # PromptManager: agent.md sections + tools -> system prompt
 │   ├── agents/
 │   │   ├── loader.py         # Read/parse engine/agent_library/{id}/agent.md + agent.json,
@@ -158,6 +176,22 @@ chat_store.finalize_session() writes data/chatlog/agent-text-records/<title>[-v]
 + logs it in data/chatlog/chatRecord.jsonl
 ```
 
+### Model selection
+
+- `config/models.json` is **auto-scanned at startup** (`refresh_models()`) from
+  THIS machine's Ollama — it always mirrors what is installed, and the model
+  dropdown only lists detected models.
+- A requested model that is **not installed** (for example a per-agent pin or
+  default written on another OS) is never used blindly: the server logs an
+  `[ask_llm]` warning and falls back to a detected model instead of failing
+  with a 404. So Windows-authored settings keep working on Linux or any
+  machine, regardless of its Ollama install.
+- Agents that use tools get a model Ollama reports as **`tools`-capable** when
+  possible (confirmed no-tools models are skipped). Only if no tool-capable
+  model exists does the agent answer without tool use.
+- Empty `defaultModel` (`""`) means "resolve to the first detected model" —
+  changes to your defaults apply after a server restart.
+
 ## Chats: one server-side session at a time
 
 The server tracks exactly ONE active chat session (it has its own start, middle
@@ -233,6 +267,14 @@ Saved chats can be committed to a persistent RAG store so agents using the
   configuration page shows a "restart the server" banner until you do.
   Transcripts follow **Chat save path**, not the Data folder; blank means
   `<dataDir>/chatlog/agent-text-records`.
+- **Cross-platform paths:** the same settings file works on Windows *and*
+  Linux. Add `dataDirLinux`, `chatSavePathLinux` and `ragDbPathLinux` (set
+  from Configuration → "Linux paths" on a non-Windows machine) to point the
+  app at a second, Linux-specific layout; each override falls back to a
+  project default when blank. A Windows-only drive path (`E:\data\...`) left
+  without a Linux override is ignored on Linux rather than becoming a literal
+  `E:\data\...` folder. `GET /api/settings` and `GET /api/rag/status` both
+  report the detected `platform` (`"win"` / `"nix"`).
 - **Manual maintenance:** `python scripts/rebuild_rag.py [build|purge|status]`,
   the "Rebuild memory"/"Forget everything" buttons in Configuration, or the
   "Clear Memory" button in the chat header (`chat.html`) — clear resets the
@@ -262,11 +304,18 @@ Full field reference, tool catalog, copy-paste example, and troubleshooting:
 ## Recent changes
 
 See **[docs/CHANGELOG.md](docs/CHANGELOG.md)** for the full history. The most
-recent entry (2026-09-12) removed the Agent Monitor feature, restored
-`engine/core/agent.py` and `server/server.py` to their working originals,
-re-added the Settings-page endpoints (`/api/tools`,
-`/api/agents/{id}/config`, `/api/about`), and made `python server.py` runnable
-from any directory.
+recent entry (2026-09-12) made the app **cross-platform**: per-OS path
+overrides (`dataDirLinux` / `chatSavePathLinux` / `ragDbPathLinux`) so one
+settings file works on Windows and Linux, a Windows drive-path guard so
+`E:\data\...` values never become literal folders on Linux, and **resilient
+model selection** — a requested-but-not-installed model falls back to a
+detected one (preferring `tools`-capable models for tool agents) instead of
+crashing the chat.
+
+Earlier the same day the Agent Monitor feature was removed, `engine/core/agent.py`
+and `server/server.py` were restored to their working originals, the
+Settings-page endpoints (`/api/tools`, `/api/agents/{id}/config`, `/api/about`)
+were re-added, and `python server.py` was made runnable from any directory.
 
 Recovery artifacts to be aware of:
 
@@ -284,3 +333,7 @@ Recovery artifacts to be aware of:
   FastAPI's threadpool instead of stalling the event loop.
 - Chat transcripts live in `data/chatlog/agent-text-records/` as `.txt` files;
   `data/chatlog/chatRecord.jsonl` is the header log that points at them.
+- **`ModuleNotFoundError: No module named 'fastapi'`** when starting the
+  server means the shell is not using the project venv. Linux has no bare
+  `python` — activate it (`source venv/bin/activate`) or launch directly
+  (`venv/bin/python server/server.py`).

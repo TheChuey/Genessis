@@ -7,6 +7,10 @@ __pycache__/
 # Runtime data
 data/
 
+# Literal Windows drive-path folders (E:\data\...) created by mis-configured
+# absolute paths when the app runs on Linux - never track these.
+[A-Z]:*
+
 # Logs & temp
 *.log
 *.tmp

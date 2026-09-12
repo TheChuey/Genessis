@@ -58,9 +58,11 @@ async function boot() {
     models = loadedModels || [];
     tools = loadedTools || [];
     let restartNeeded = false;
+    let platform = "nix";
     if (loadedMeta) {
         settings = loadedMeta.settings || {};
         restartNeeded = Boolean(loadedMeta.restartNeeded);
+        platform = loadedMeta.platform || "nix";
     }
 
     if (failures.length) {
@@ -78,7 +80,7 @@ async function boot() {
     }
 
     // ---- App-level form (default agent/model, paths, versioning, RAG) ----
-    const form = buildConfigForm({ agents, models, settings });
+    const form = buildConfigForm({ agents, models, settings, platform });
     mount.appendChild(form.root);
 
     wireDefaultAgentLink(form.root, agents);

@@ -156,14 +156,16 @@ export async function loadAppSettings() {
 
 /**
  * Load settings plus the meta flags from /api/settings.
- * Returns { settings, restartNeeded } where restartNeeded is true when the
- * stored path settings changed since the server started (restart required).
+ * Returns { settings, restartNeeded, platform } where restartNeeded is true
+ * when the stored path settings changed since the server started (restart
+ * required) and platform is "win" or "nix" (which path fields to show).
  */
 export async function loadAppSettingsWithMeta() {
     const data = await request("/api/settings");
     return {
         settings: data.settings || {},
         restartNeeded: Boolean(data.restartNeeded),
+        platform: data.platform === "win" ? "win" : "nix",
     };
 }
 

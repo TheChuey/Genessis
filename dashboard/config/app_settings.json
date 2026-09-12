@@ -1,6 +1,6 @@
 {
   "defaultAgentId": "dev_assistant",
-  "defaultModel": "llama3.1:8b",
+  "defaultModel": "",
   "activeDiscussionId": "disc-mthko2ytzf9exz",
   "disableVersioning": false,
   "behavior": {
@@ -15,13 +15,16 @@
     "enabled": true,
     "tests": []
   },
-  "dataDir": "E:\\data\\rag_store",
-  "ragDbPath": "E:\\data\\db",
+  "dataDir": "/home/goofy/data",
+  "dataDirLinux": "/home/goofy/data",
+  "ragDbPath": "/home/goofy/data/db",
+  "ragDbPathLinux": "/home/goofy/data/db",
   "rag": {
     "commitOnSave": false,
     "autoIngest": true
   },
-  "chatSavePath": "E:\\data\\rag_store\\chatlog\\agent-text-records",
+  "chatSavePath": "/home/goofy/data/chat_log",
+  "chatSavePathLinux": "/home/goofy/data/chat_log",
   "observe": {
     "terminal": true,
     "tools": false,
