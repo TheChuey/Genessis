@@ -136,6 +136,7 @@ terminator1/
 │
 ├── scripts/                  # CLI utilities
 │   ├── rebuild_rag.py        # python scripts/rebuild_rag.py [build|purge|status]
+│   ├── update_docs.py        # Regenerates the docs/*.md snapshots below
 │   └── version_chats.py      # list | import | bump | versioning on|off
 │
 ├── about/                    # Site identity
@@ -147,12 +148,18 @@ terminator1/
 ├── docs/
 │   ├── CHANGELOG.md          # Every recent change (incl. the Agent Monitor removal)
 │   ├── RESTRUCTURE_README.md # History of the current package layout
-│   └── documentation_CREATING_AGENTS.md  # Agent authoring guide
+│   ├── documentation_CREATING_AGENTS.md  # Agent authoring guide
+│   ├── APP_STRUCTURE.md      # AUTO-GENERATED file layout (scripts/update_docs.py)
+│   └── APP_CODE_SNAPSHOT.md  # AUTO-GENERATED: every file + its full contents
 ├── test/                     # PRE-INFECTION original snapshot, kept as a recovery
 │                             # reference (not part of the running app).
 ├── requirements.txt
 └── README.md
 ```
+
+> **Keep the docs fresh:** `docs/APP_STRUCTURE.md` and `docs/APP_CODE_SNAPSHOT.md`
+> are generated, not hand-maintained. After code changes run
+> `venv/bin/python scripts/update_docs.py` and commit the regenerated files.
 
 ## How an answer is produced
 

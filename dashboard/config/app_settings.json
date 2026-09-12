@@ -7,9 +7,9 @@
     "autoHi": true
   },
   "appearance": {
-    "theme": "dark",
+    "theme": "light",
     "fontFamily": "",
-    "fontSize": 16
+    "fontSize": 14
   },
   "chatTests": {
     "enabled": true,

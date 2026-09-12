@@ -3,6 +3,25 @@
 All notable changes to this project. Format based on Keep a Changelog
 (https://keepachangelog.com/), grouped by date.
 
+## 2026-09-12 — AI-readable app snapshot docs
+
+The whole app is now readable as two markdown files an AI can ingest:
+
+- `docs/APP_STRUCTURE.md` — the file/folder layout (tree), totals, and pointer
+  to the other docs.
+- `docs/APP_CODE_SNAPSHOT.md` — every source file's name AND full contents as
+  text (Python, JS, HTML, CSS, configs, agent definitions, and these docs).
+
+Both are **auto-generated** by `scripts/update_docs.py`. After any meaningful
+change, refresh them with:
+
+    venv/bin/python scripts/update_docs.py
+
+The walk deliberately skips `test/` (pre-infection recovery snapshot),
+`venv/`, `.git/`, `data/` (runtime state), `__pycache__/`, and backup/bytecode
+files (`*.bak`, `*.pyc`) so the snapshot only spans the running app — about
+60 files / ~0.5 MB of text.
+
 ## 2026-09-12 — Cross-platform paths + resilient model selection
 
 The app now runs from the same checkout on both Windows and Linux, and never
