@@ -1029,6 +1029,29 @@ code {
     background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
 }
 
+#config-section .os-path-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 8px 0 18px;
+}
+
+#config-section .os-path-group-title {
+    flex: 0 0 100%;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text, #1c2024);
+}
+
+#config-section .os-path-group .field {
+    flex: 1 1 220px;
+}
+
+#config-section .os-path-group .os-path-current span {
+    color: var(--color-primary, #2b6fdb);
+    font-weight: 600;
+}
+
 .chat-tests-toolbar {
     display: flex;
     align-items: center;

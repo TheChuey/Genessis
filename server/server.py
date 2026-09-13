@@ -568,6 +568,7 @@ async def get_app_settings():
     return {
         "settings": payload,
         "restartNeeded": paths.restart_needed(),
+        "platform": paths.platform(),
     }
 
 
@@ -575,27 +576,20 @@ async def get_app_settings():
 async def save_app_settings(partial_settings: dict):
     """Merge a partial settings object into what is already stored.
 
-    Path settings that are Windows absolute paths (X:\\... or \\\\UNC) are
-    cleared back to "" so the settings file stays portable across Windows /
-    Linux / macOS - the running server keeps its already-resolved folders
-    until restart. The response reports which keys were normalized."""
+    Path values are stored verbatim - each OS picks its own per-OS key
+    (dataDirWindows / dataDirLinux / dataDirMac, ...) or falls back to the
+    plain key, and the running server keeps its already-resolved folders
+    until a restart (`restartNeeded`)."""
     stored = _load_json(APP_SETTINGS_FILE, {})
     stored.update(partial_settings)
 
-    normalized = []
-    for key in ("dataDir", "chatSavePath", "ragDbPath"):
-        value = stored.get(key)
-        if isinstance(value, str) and paths.is_windows_path(value):
-            stored[key] = ""
-            normalized.append(key)
-
     _save_json(APP_SETTINGS_FILE, stored)
-
-    if normalized:
-        print("[SETTINGS] normalized (cleared) Windows absolute paths: "
-              + ", ".join(normalized))
     print(f"[SETTINGS] updated keys: {', '.join(partial_settings.keys()) or '(none)'}")
-    return {"settings": stored, "normalized": normalized}
+    return {
+        "settings": stored,
+        "restartNeeded": paths.restart_needed(),
+        "platform": paths.platform(),
+    }
 
 
 # --- CHAT SAVE (write chat transcripts as .txt files) ---
@@ -615,7 +609,11 @@ def _resolve_chat_dir(raw_path: str) -> Path:
     - Absolute path -> kept only if it stays inside BASE_DIR; otherwise
       an absolute path is re-rooted under BASE_DIR (so a crafted value
       can never escape the project).
+
+    A Windows-style drive path (E:\\... ) has no meaning on Linux and is
+    treated as empty there (same rule as server/paths.py).
     """
+    raw_path = paths.os_text(raw_path)
     candidate = Path(raw_path or "")
 
     if not candidate.is_absolute():

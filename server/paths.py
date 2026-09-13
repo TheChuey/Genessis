@@ -1,4 +1,4 @@
-"""
+r"""
 app/paths.py
 ============
 
@@ -7,7 +7,7 @@ writes. Paths are configured from the dashboard's consolidated settings
 page (config.html), stored in dashboard/config/app_settings.json via
 /api/settings:
 
-app_settings.json keys:
+    app_settings.json keys:
         dataDir        base data folder (default "data").
                        Relative -> project root; absolute -> used as-is.
         chatSavePath   where saved chat transcripts (.txt) are written.
@@ -16,21 +16,22 @@ app_settings.json keys:
                        Empty -> <dataDir>/rag_db
         rag            { commitOnSave: bool, autoIngest: bool }
 
-    Every key can ALSO come from an environment variable, which wins over the
-    settings file (so a second machine / a Chromebook can redirect storage
-    without touching any file):
+    Per-OS keys (one settings file works on Windows, Linux and macOS):
+        <key>Windows / <key>Linux / <key>Mac    e.g. dataDirLinux,
+                       chatSavePathWindows, ragDbPathMac. The key matching
+                       the CURRENT machine wins over the plain key below it;
+                       keys for OSes you do not use are simply left alone.
+                       A plain key that is a Windows drive path (D:\... /
+                       D:/...) is ignored on non-Windows hosts unless a
+                       per-OS key for that host is set - the app falls back
+                       to a project default instead of creating a literal
+                       folder.
 
+    Environment variables (highest precedence - handy on a Chromebook or a
+    second machine, no file edits needed):
         GENESSIS_DATA_DIR        -> dataDir
         GENESSIS_CHAT_SAVE_PATH  -> chatSavePath
         GENESSIS_RAG_DB_PATH     -> ragDbPath
-
-    `~` and $VAR are expanded (e.g. GENESSIS_DATA_DIR=~/genessis-data).
-
-CROSS-PLATFORM: the app runs on Windows, Linux and macOS. If a settings file
-copied from a Windows machine still holds absolute Windows paths (E:\\data\\...)
-and we are NOT on Windows, those are mapped to project-relative folders
-(`E:\\data\\rag_store` -> <project>/data/rag_store) with a one-time warning,
-so nothing silently writes into a garbage folder.
 
 Everything else is derived from these so changing "data folder" moves the
 chatlog, transcripts, history, exports and RAG store together.
@@ -54,6 +55,10 @@ APP_SETTINGS_FILE = BASE_DIR / "dashboard" / "config" / "app_settings.json"
 
 _EMPTY = (None, "", "")
 
+_IS_WINDOWS = os.name == "nt"
+# Absolute Windows path: drive letter (D:\... / D:/...) or UNC (\\server\...).
+_WIN_PATH_RE = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]{2})")
+
 # Settings key -> environment variable override.
 _ENV_KEYS = {
     "dataDir": "GENESSIS_DATA_DIR",
@@ -61,11 +66,8 @@ _ENV_KEYS = {
     "ragDbPath": "GENESSIS_RAG_DB_PATH",
 }
 
-# One-time warning guard per key (the message is printed on first use only).
-_warned: set[str] = set()
-
-_DRIVE_RE = re.compile(r"^[A-Za-z]:[/\\]")
-_UNC_RE = re.compile(r"^([/\\]{2})")
+# Current platform -> per-OS settings-key suffix.
+_OS_SUFFIX = {"win": "Windows", "linux": "Linux", "mac": "Mac"}
 
 
 def _get_text(value):
@@ -79,54 +81,57 @@ def _bool(value):
     return bool(value)
 
 
-def is_windows_path(text: str) -> bool:
-    """True when `text` is an absolute Windows-style path (X:\\... or \\\\UNC)."""
-    return bool(text and (_DRIVE_RE.match(text) or _UNC_RE.match(text)))
+def platform() -> str:
+    """'win' on Windows, 'linux' on Linux, 'mac' on macOS - used by the
+    dashboard to highlight the path fields for the current machine."""
+    if _IS_WINDOWS:
+        return "win"
+    if os.environ.get("GENESSIS_PLATFORM"):
+        normalized = os.environ["GENESSIS_PLATFORM"].strip().lower()
+        if normalized in _OS_SUFFIX:
+            return normalized
+    return "linux" if os.path.exists("/etc/os-release") else (
+        "mac" if os.path.exists("/System/Library/CoreServices") else "linux")
 
 
-def _portable_windows_path(text: str, source_label: str,
-                           os_name: str | None = None) -> str:
-    """Turn stored Windows absolute paths into project-relative paths when we
-    are not running on Windows. Returns the path unchanged on Windows.
+def os_text(value):
+    r"""Public: normalize a raw path string for the current OS.
 
-    `E:\\data\\rag_store` -> `data/rag_store`  (drive letter dropped,
-    separators normalized, one-time warning printed)."""
-    if os_name is None:
-        os_name = os.name
-    if os_name == "nt" or not text:
-        return text
-
-    norm = text.replace("\\", "/")
-    rel = None
-    drive = _DRIVE_RE.match(norm)
-    unc = _UNC_RE.match(norm)
-    if drive:
-        rel = norm[drive.end():].lstrip("/")
-    elif unc:
-        rel = norm[unc.end():].lstrip("/")
-
-    if rel is None:
-        return text
-
-    if not rel:
-        rel = ""
-    if source_label not in _warned:
-        _warned.add(source_label)
-        print(f"[paths] WARNING: '{text}' is a Windows absolute path - this is "
-              f"not {os_name}; using it as project-relative '{rel or '(defaults)'}' "
-              f"instead. Set {source_label} (or a GENESSIS_* env var) to override.")
-    return rel
+    Returns '' when a Windows-only path (E:\\... / E:/... / \\\\UNC) is being
+    resolved on a non-Windows host, so it can never be turned into a literal
+    folder on Linux/macOS. On Windows the value is returned verbatim.
+    """
+    text = _get_text(value)
+    if not _IS_WINDOWS and text and _WIN_PATH_RE.match(text):
+        return ""
+    return text
 
 
-def _configured(key: str) -> tuple[str, str]:
-    """(effective value, source label) for one path key.
-    Precedence: environment variable > app_settings.json."""
+def _env_override(key):
+    """Expanded env-var override for `key`, or None when not set."""
     env_name = _ENV_KEYS.get(key)
-    if env_name:
-        env_value = os.environ.get(env_name)
-        if env_value is not None and env_value.strip():
-            return env_value.strip(), env_name
-    return _get_text(_cfg.get(key)), key
+    if not env_name:
+        return None
+    value = os.environ.get(env_name)
+    if value is None or not value.strip():
+        return None
+    return os.path.expanduser(os.path.expandvars(value.strip()))
+
+
+def _os_value(cfg, key):
+    """Platform-aware value for one path setting.
+
+    Precedence: environment variable > the per-OS key for THIS machine
+    (<key>Windows / <key>Linux / <key>Mac) > the plain `key`. Windows drive
+    paths in the plain key are ignored on non-Windows hosts so the app falls
+    back to a project default instead of creating a literal folder.
+    """
+    env_value = _env_override(key)
+    if env_value is not None:
+        return _get_text(env_value)
+    suffix = _OS_SUFFIX.get(platform(), "")
+    os_key = f"{key}{suffix}" if suffix else key
+    return os_text(cfg.get(os_key) or cfg.get(key))
 
 
 def _load_app_settings() -> dict:
@@ -142,10 +147,9 @@ def resolve_path(raw, *fallback_parts) -> Path:
     `raw` is a folder path and is used verbatim when present (absolute paths
     are used as-is so the data/RAG store can live outside the project;
     relative paths resolve against the project root). When `raw` is empty,
-    fall back to BASE_DIR/<fallback_parts>. Windows absolute paths are mapped
-    to project-relative on non-Windows OSes (see `_portable_windows_path`).
+    fall back to BASE_DIR/<fallback_parts>.
     """
-    text = _configured_portable(raw)
+    text = os_text(raw)
     if not text:
         return BASE_DIR.joinpath(*fallback_parts).resolve()
     path = Path(os.path.expandvars(text)).expanduser()
@@ -156,28 +160,13 @@ def resolve_path(raw, *fallback_parts) -> Path:
 
 def _rooted(raw, default: Path) -> Path:
     """Like resolve_path, but the fallback is an already-resolved Path."""
-    text = _configured_portable(raw)
+    text = os_text(raw)
     if not text:
         return default
     path = Path(os.path.expandvars(text)).expanduser()
     if not path.is_absolute():
         path = BASE_DIR / path
     return path.resolve()
-
-
-def _configured_portable(raw) -> str:
-    """Resolve a raw settings value (possibly an env override) into the
-    OS-appropriate relative form. `raw` may be a path-setting key name (e.g.
-    "dataDir" - reads the env override / settings through `_configured`) or an
-    already-extracted path string (used by /api/settings)."""
-    if isinstance(raw, str) and raw in _ENV_KEYS:
-        text, source_label = _configured(raw)
-    elif isinstance(raw, str):
-        text, source_label = raw, "settings"
-    else:
-        text, source_label = _configured(raw)
-    text = os.path.expandvars(text)
-    return _portable_windows_path(text, source_label)
 
 
 # --------------------------------------------------------------------------
@@ -189,19 +178,19 @@ _cfg = _load_app_settings()
 # Snapshot of the stored *path* settings at import. The UI can compare
 # against the live file to tell the user a restart is required.
 _PATH_KEYS = ("dataDir", "chatSavePath", "ragDbPath")
-_path_keys_at_import = {key: _get_text(_cfg.get(key)) for key in _PATH_KEYS}
+_path_keys_at_import = {key: _os_value(_cfg, key) for key in _PATH_KEYS}
 
-# Base data folder (dataDir overrides the default "data").
-DATA_DIR = resolve_path("dataDir", "data")
+# Base data folder (dataDir / dataDirLinux / ... overrides the default "data").
+DATA_DIR = resolve_path(_os_value(_cfg, "dataDir"), "data")
 
 # Chat log folder + transcripts (chatSavePath overrides the sub-folder).
 CHATS_DIR = DATA_DIR / "chatlog"
-CHAT_SAVE_PATH = _configured_portable("chatSavePath")
-RECORDS_DIR = _rooted("chatSavePath", DATA_DIR / "chatlog" / "agent-text-records")
+CHAT_SAVE_PATH = _os_value(_cfg, "chatSavePath")
+RECORDS_DIR = _rooted(CHAT_SAVE_PATH, DATA_DIR / "chatlog" / "agent-text-records")
 CHAT_RECORDS_DIR = RECORDS_DIR  # alias used by the RAG search tool
 
 # RAG store (ragDbPath overrides <dataDir>/rag_db).
-RAG_DB_DIR = _rooted("ragDbPath", DATA_DIR / "rag_db")
+RAG_DB_DIR = _rooted(_os_value(_cfg, "ragDbPath"), DATA_DIR / "rag_db")
 
 # Chat log metadata + active session.
 LOG_FILE = CHATS_DIR / "chatRecord.jsonl"
@@ -237,7 +226,7 @@ def restart_needed() -> bool:
     server is still using the old resolved locations until a restart."""
     current = _load_app_settings()
     for key in _PATH_KEYS:
-        if _get_text(current.get(key)) != _path_keys_at_import.get(key):
+        if _os_value(current, key) != _path_keys_at_import.get(key):
             return True
     return False
 
@@ -246,8 +235,20 @@ def about() -> dict:
     """Human-readable summary of the resolved locations (for the config UI
     and the /api/rag/status endpoint)."""
     def _source(key):
-        return _configured(key)[1]
+        if _env_override(key):
+            return _ENV_KEYS[key]
+        suffix = _OS_SUFFIX.get(platform(), "")
+        os_key = f"{key}{suffix}" if suffix else key
+        value = _cfg.get(os_key)
+        if value not in _EMPTY:
+            return os_key
+        if _cfg.get(key) not in _EMPTY:
+            if not _IS_WINDOWS and _WIN_PATH_RE.match(_get_text(_cfg.get(key))):
+                return f"{key} (ignored Windows path on this OS)"
+            return key
+        return f"{key} (default)"
     return {
+        "platform": platform(),
         "data_dir": str(DATA_DIR),
         "chat_records_dir": str(RECORDS_DIR),
         "chat_log_file": str(LOG_FILE),

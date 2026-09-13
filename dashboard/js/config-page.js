@@ -70,9 +70,11 @@ async function boot() {
     models = loadedModels || [];
     tools = loadedTools || [];
     let restartNeeded = false;
+    let platform = "nix";
     if (loadedMeta) {
         settings = loadedMeta.settings || {};
         restartNeeded = Boolean(loadedMeta.restartNeeded);
+        platform = loadedMeta.platform || "nix";
     }
 
     if (failures.length) {
@@ -90,7 +92,7 @@ async function boot() {
     }
 
     // ---- App-level form (default agent/model, paths, versioning, RAG) ----
-    const form = buildConfigForm({ agents, models, settings });
+    const form = buildConfigForm({ agents, models, settings, platform });
     mount.appendChild(form.root);
 
     wireDefaultAgentLink(form.root, agents);
@@ -117,22 +119,17 @@ async function boot() {
             statusEl.textContent = "Settings saved.";
             statusEl.className = "status-message ok";
 
-            // Response window: confirm + list any path fields that were
-            // cleared because they held non-portable Windows absolute paths.
+            // Response window: confirm the save + which platform's paths
+            // apply + restart hint when stored path settings changed.
             saveResponse.replaceChildren();
             saveResponse.hidden = false;
             saveResponse.appendChild(el("strong", "", "Settings saved \u2713"));
             const detail = el("ul", "save-response-detail", "");
-            const normalized = saved.normalized && saved.normalized.length ? saved.normalized : [];
-            normalized.forEach((key) => {
-                const label = { dataDir: "Data folder", chatSavePath: "Chat save path", ragDbPath: "RAG database path" }[key] || key;
-                detail.appendChild(el("li", "", label +
-                    " held a Windows path (e.g. E:\\data\\...) and was cleared \u2014 the default project-relative folder now applies. " +
-                    "Restart the server to move the data folders."));
-            });
-            if (!normalized.length) {
-                detail.appendChild(el("li", "", "All path settings are portable."));
-            }
+            const osLabel = platform === "win" ? "Windows" : (platform === "mac" ? "macOS" : "Linux");
+            const restartNeeded = Boolean(saved.restartNeeded);
+            detail.appendChild(el("li", "", "Using the " + osLabel +
+                " path settings" + (restartNeeded ? " \u2014 restart the server to apply path changes." : ".")));
+            detail.appendChild(el("li", "", "Each OS can point to its own folders; leave the ones you don't use alone. A GENESSIS_* env var overrides everything."));
             saveResponse.appendChild(detail);
         } catch (error) {
             statusEl.textContent = error.message;
@@ -297,7 +294,8 @@ function renderSharedTests(mount) {
             },
         };
         try {
-            settings = await saveAppSettings(payload);
+            const saved = await saveAppSettings(payload);
+            settings = saved.settings || settings;
         } catch (_) { /* the page re-renders with stored truth on reload */ }
     }
 }

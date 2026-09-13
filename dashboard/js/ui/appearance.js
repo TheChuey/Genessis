@@ -201,11 +201,11 @@ export function renderAppearance({ mountEl, settings = {}, onSave }) {
         saveBtn.disabled = true;
         try {
             const updated = await saveAppSettings(payload);
-            applyAppearance(updated.appearance || payload.appearance);
+            applyAppearance((updated.settings && updated.settings.appearance) || payload.appearance);
             try {
                 localStorage.setItem("appearance-theme", themeSelect.value);
             } catch (_) { /* private mode - ignore */ }
-            if (typeof onSave === "function") onSave(updated);
+            if (typeof onSave === "function") onSave(updated.settings || updated);
             statusEl.textContent = "Appearance saved - both pages restart with it.";
             statusEl.style.color = "var(--color-success, #16803c)";
         } catch (error) {

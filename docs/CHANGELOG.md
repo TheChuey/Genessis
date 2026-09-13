@@ -3,60 +3,89 @@
 All notable changes to this project. Format based on Keep a Changelog
 (https://keepachangelog.com/), grouped by date.
 
-## 2026-09-12 — Cross-platform paths + save feedback + Linux/Chromebook support
+## 2026-09-12 — Cross-platform paths (Windows/Linux/macOS) + save feedback
 
-The app now works identically on Windows, Linux, macOS and the ChromeOS Linux
-container, and where data is saved can be changed without editing a file.
+The app now runs from the same checkout on Windows, Linux, macOS and the
+ChromeOS Linux container, and where data is saved can be changed without
+editing a file. (A merge combined a Windows-side `GENESSIS_*` env-var approach
+with the Chromebook-side per-OS-key approach, so both are supported.)
 
 ### Added — portable path resolution (`server/paths.py`)
 
+- **Per-OS path keys** in `dashboard/config/app_settings.json`: one settings
+  file can carry three layouts — the plain `dataDir` / `chatSavePath` /
+  `ragDbPath` plus `dataDirWindows` / `dataDirLinux` / `dataDirMac` (and the
+  matching chat/rag variants). The key for the CURRENT machine wins; keys for
+  OSes you do not use are left alone. Relative -> project root; absolute ->
+  used as-is; empty -> default.
 - **Env-var overrides** (highest precedence): `GENESSIS_DATA_DIR`,
   `GENESSIS_CHAT_SAVE_PATH`, `GENESSIS_RAG_DB_PATH` override the stored
-  settings; `~` and `$VAR` are expanded, so `~/genessis-data` works. Precedence
-  chain: env var -> `app_settings.json` -> project-relative `data/`.
-- **Cross-platform Windows-path guard**: stored absolute Windows paths
-  (`E:\data\...`, `\\server\share`) are detected and, on any non-Windows OS,
-  mapped to project-relative folders with a one-time warning (`E:\data\rag_store`
-  -> `<project>/data/rag_store`). Pure helper with injectable OS hint so it is
-  unit-testable for Linux/macOS semantics.
-- `server/paths.py` docstring + `about()` gained a `sources` map telling which
-  setting source resolved each key.
+  settings; `~` and `$VAR` are expanded, so `~/genessis-data` works.
+  Precedence chain: env var -> per-OS key -> plain key -> project-relative
+  `data/`.
+- **Windows drive-path guard**: a Windows absolute path (`E:\...`, `E:/...`,
+  `\\server\share`) in the plain key is ignored on non-Windows hosts when no
+  per-OS key is set — the app falls back to a project default instead of
+  creating a literal `E:\...` folder on Linux/macOS. `server.py`'s legacy
+  `/api/chat-save` resolver uses the same guard.
+- `platform()` now reports `win` / `linux` / `mac`; `about()` gained a
+  `sources` map telling which key or env var resolved each setting. Stray
+  `E:\data\rag_store` folders created by old resolutions were removed.
+- `.gitignore` — `[A-Z]:*` rule so accidental drive-letter folders can never
+  be tracked.
+
+### Added — resilient model selection
+
+- `engine/core/llm.py` — `_resolve_model()`: an uninstalled requested model is
+  dropped with an `[ask_llm]` warning and the first detected model is used
+  instead; tool-calling agents prefer a tools-capable detected model;
+  per-model capabilities are cached briefly; an explicit request is still
+  honoured when no models are visible.
+- `dashboard/config/app_settings.json` — `defaultModel` is `""` (resolves to
+  the first detected model; the user picks from the dropdown).
 
 ### Changed — save flow + startup visibility
 
-- `server/server.py` `/api/settings` — on save, any `dataDir`/`chatSavePath`/
-  `ragDbPath` that is a Windows absolute path is cleared to `""` and reported
-  in the response as `{normalized: [...]}`, so a settings file copied between
-  machines never carries machine-specific `E:\...` paths.
-- `server/server.py` `lifespan()` — prints the resolved data / chat records /
-  RAG folders at boot and flags which keys are env-overridden.
-- `dashboard/js/config-page.js` — save now shows a prominent green **"Settings
-  saved"** response window that also lists any path fields that were cleared
-  because they held Windows paths (plus the restart hint). `dashboard/config.html`
-  gained the `.save-response` styles.
-- `dashboard/config/app_settings.json` — `dataDir`, `chatSavePath`,
-  `ragDbPath` cleared to `""` (defaults / env vars now control storage).
+- `server/server.py` — `GET /api/settings` returns `platform`; save merges
+  without rewriting path values; `lifespan()` prints the resolved data / chat
+  records / RAG folders at boot and flags env-overridden keys.
+- `dashboard/js/ui/config-form.js` — an always-visible **per-OS paths** section
+  (Windows / Linux / macOS inputs for Data folder, Chat save path and RAG
+  database) with the current platform's row highlighted. `config-page.js` /
+  `api.js` pass the detected platform through.
+- `dashboard/js/config-page.js` — save shows a green **"Settings saved"**
+  response window with a restart hint when stored paths changed since boot.
+  `dashboard/config.html` gained the `.save-response` styles.
 
 ### Changed — docs
 
-- `README.md` — new "Running on Linux / macOS / ChromeOS (Chromebook)"
-  quickstart and "Changing where data is saved" (Settings vs env vars vs
-  defaults) sections; folder tree updated (`js/ui/` + removed `test/`); the
-  deleted `docs/documentation_CREATING_AGENTS.md` link replaced; "Recent
-  changes" points at the current entry.
-- `docs/RESTRUCTURE_README.md` — `test/` and the deleted agent-authoring doc
+- `README.md` — "Running on Linux / macOS / ChromeOS (Chromebook)" quickstart,
+  "Changing where data is saved" (per-OS keys vs env vars vs defaults) and
+  "Model selection" sections; folder tree updated (`js/ui/` added, `test/`
+  removed); the deleted `docs/documentation_CREATING_AGENTS.md` link replaced;
+  "Recent changes" points at the current entry.
+- `docs/RESTRUCTURE_README.md` — `test/` + the deleted agent-authoring doc
   removed from the tree; portable-`paths.py` note added under "Launching".
 
 ### Verified
 
-- Path unit tests (forged posix semantics): drive/UNC detection; mapping
-  `E:\data\rag_store` -> `data/rag_store` and UNC -> relative; unchanged on
-  Windows and for POSIX absolute paths; env override wins over stored settings;
-  `$HOME`/`~` expansion; `about()["sources"]` populated.
-- `/api/settings` returns `{settings, normalized}` and clears Windows paths.
+- Path unit tests (forged Linux/macOS semantics): drive/UNC detection;
+  per-OS key selection; env override wins over stored settings; `$HOME`/`~`
+  expansion; `about()["sources"]` populated.
+- `/api/settings` returns `{settings, restartNeeded, platform}` and merges
+  cleanly.
 - uvicorn boot with `GENESSIS_DATA_DIR` set to a temp folder: boot log shows
-  data/records/rag all under the override and `dataDir overridden by
-  GENESSIS_DATA_DIR`; `/api/rag/status` 200.
+  data/records/rag under the override; `/api/rag/status` 200.
+
+## 2026-09-12 — AI-readable app snapshot docs
+
+The whole app is readable as two auto-generated markdown files an AI can
+ingest: `docs/APP_STRUCTURE.md` (file/folder tree) and
+`docs/APP_CODE_SNAPSHOT.md` (every source file's name and full contents).
+Both are produced by `scripts/update_docs.py`; refresh them after any
+meaningful change with `venv/bin/python scripts/update_docs.py` (the walk
+skips `test/`, `venv/`, `.git/`, `data/`, `__pycache__/` and `*.bak`/`*.pyc`
+so the snapshot spans only the running app).
 
 ## 2026-09-12 — Frontend wiring for the interface system + title propagation
 

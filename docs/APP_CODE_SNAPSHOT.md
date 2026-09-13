@@ -1,12 +1,12 @@
 # Terminator1 — App Code Snapshot
 
-_Auto-generated on 2026-09-12T18:12:53 by `scripts/update_docs.py`._
+_Auto-generated on 2026-09-12T18:28:23 by `scripts/update_docs.py`._
 
 
 ## README.md
 
 ```markdown
-# Terminator1 (Genessis)
+﻿# Terminator1 (Genessis)
 
 A local lab for building and testing AI agents: **FastAPI** backend + vanilla JS
 frontend + **Ollama** local LLMs.
@@ -31,16 +31,16 @@ a new agent is just a folder with `agent.md` + `agent.json` (+ tool IDs).
 Open **/static/config.html** (the "Settings" button on the dashboard and in the
 chat header) for EVERY configuration in one screen:
 
-- **App defaults** — default agent (with a jump-link to that agent's card),
+- **App defaults** â€” default agent (with a jump-link to that agent's card),
   default model, chat save path, data folder, RAG database path, chat
   versioning, and the RAG memory defaults. Stored in
   `dashboard/config/app_settings.json`.
-- **Appearance** — one theme + font set for all pages.
-- **Agents** — one card per agent, consolidating its whole config in one place:
+- **Appearance** â€” one theme + font set for all pages.
+- **Agents** â€” one card per agent, consolidating its whole config in one place:
   metadata + model + tools (its `agent.json`), its behavior prose (editable
   `agent.md`), and that agent's chat tests + an inline runner.
-- **Shared tests** — tests with no agent that run for every agent.
-- **Models** — read-only snapshot of the installed Ollama models.
+- **Shared tests** â€” tests with no agent that run for every agent.
+- **Models** â€” read-only snapshot of the installed Ollama models.
 
 Per-agent data lives with the agent (`engine/agent_library/<id>/agent.json` now
 holds `tests`; `agent.md` is the behavior). The default agent for `/api/chat`
@@ -55,12 +55,28 @@ python -m pip install -r requirements.txt
 python server.py
 ```
 
-`python server.py` can be run from ANY directory — the project root or
+## Quickstart (Linux / Chromebook Linux)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -r requirements.txt
+python server.py
+```
+
+`python server.py` can be run from ANY directory â€” the project root or
 `server/` both work (the file bootstraps `sys.path` itself). Override the port
-with `$env:PORT=9000`. The equivalent uvicorn launch (from the project root):
+with `$env:PORT=9000` (PowerShell) or `PORT=9000 python server.py` (Linux).
+The equivalent uvicorn launch (from the project root):
 
 ```powershell
 venv\Scripts\python -m uvicorn server.server:app --host 127.0.0.1 --port 8000
+```
+
+Linux uses the same package layout in the venv, so the equivalent is:
+
+```bash
+venv/bin/python -m uvicorn server.server:app --host 127.0.0.1 --port 8000
 ```
 
 Open **http://127.0.0.1:8000** (Chrome/Edge).
@@ -129,118 +145,140 @@ default `data/` folder travels with the project) or pin them via the
 
 ```
 terminator1/
-├── server/                   # Thin glue: FastAPI app + chat log + path config
-│   ├── server.py             # HTTP endpoints, static mount, lifespan. The ONLY
-│   │                         # thing the browser talks to. `python server.py`
-│   │                         # runs from any directory.
-│   ├── paths.py              # Config-driven runtime path authority: dataDir /
-│   │                         # chatSavePath / ragDbPath / RAG switches.
-│   └── chat_store/           # Server-side chat session + chat log
-│       ├── store.py          # ensure_session / append_turn / finalize_session,
-│       │                     # the one-active-chat state, .txt transcripts,
-│       │                     # chatRecord.jsonl (create/read/delete).
-│       └── logger.py         # Small helpers the store uses to log rows.
-│
-├── engine/                   # The agent engine
-│   ├── core/
-│   │   ├── agent.py          # AgentProfile + the reusable Agent: think/act/observe
-│   │   ├── llm.py            # ask_llm(), model resolution, context window, Ollama scan
-│   │   └── prompt.py         # PromptManager: agent.md sections + tools -> system prompt
-│   ├── agents/
-│   │   ├── loader.py         # Read/parse engine/agent_library/{id}/agent.md + agent.json,
-│   │   │                     # save_markdown / save_meta / save_tests (Settings page).
-│   │   ├── registry.py       # Scans engine/agent_library/ -> available agents.
-│   │   └── factory.py        # build_agent(agent_id, model) -> ready-to-use Agent.
-│   └── agent_library/        # THE AGENTS - filesystem is the source of truth
-│       ├── basic_chat/       # agent.md + agent.json  (mode: chat, no tools)
-│       ├── dev_assistant/    # agent.md + agent.json  (mode: agent, tools)
-│       ├── problem_discovery_agent/  # agent.md + agent.json (mode: agent)
-│       └── rag_assistant/    # agent.md + agent.json  (mode: agent, chat-memory search)
-│
-├── tools/                    # Capabilities available to agents (per-agent IDs)
-│   ├── registry.py           # TOOL_REGISTRY: tool ID -> Python function; resolve_tools/get_session
-│   ├── state.py              # FileSession: shared/persisted file-working state
-│   └── tools.py              # map_files, read_file, write_text_file, delete_files,
-│                             # get_current_date, tell_me_the_date_and_time, search_chat_logs
-│
-├── memory/                   # RAG memory store
-│   ├── ingest.py             # Transcript chunking (ingest_file / ingest_directory)
-│   ├── search.py             # RAGStorage: Chroma store + fallback vector DB
-│   ├── main.py               # Standalone RAG CLI / cognitive loop experiment
-│   └── rag_commit.py         # status / rebuild_store / purge_store for the store
-│
-├── dashboard/                # Frontend (was "static/")
-│   ├── index.html            # UI shell: agent cards + floating chat widget
-│   ├── chat.html             # Standalone self-contained chat page
-│   ├── config.html           # THE consolidated settings page (see above)
-│   ├── config/               # app_settings.json (frontend-owned settings storage)
-│   ├── css/styles.css
-│   └── js/
-│       ├── app.js            # index.html boot module (widget, sessions, agents)
-│       ├── config-page.js    # config.html boot module (all settings sections)
-│       ├── api/api.js        # All HTTP calls (chats, settings, agents, RAG, ...)
-│       ├── classes/          # chat-window.js (widget UI), ChatSession.js (state)
-│       ├── logic/            # models.js (model dropdown), chat-formatter.js
-│       └── ui/               # markdown.js, appearance.js, config-form.js,
-│                             # agents.js, agent-editor.js, header-nav.js,
-│                             # interface-indicator.js, interface-manager.js
-│
-├── scripts/                  # CLI utilities
-│   ├── rebuild_rag.py        # python scripts/rebuild_rag.py [build|purge|status]
-│   ├── version_chats.py      # list | import | bump | versioning on|off
-│   └── update_docs.py        # Regenerates APP_STRUCTURE.md + APP_CODE_SNAPSHOT.md
-│
-├── interface/                # Modular update & restore layer (no core edits needed)
-│   ├── update_manager.py     # Discover/import interface/updates/<domain>/*.py
-│   │                         # get_active_module() + move_module_to_external_archive()
-│   ├── interface_dispatcher.py  # trace_and_execute(): logs caller file+line
-│   ├── restore_manager.py    # Baseline compare/restore + snapshot_baseline()
-│   └── updates/              # Active update modules, grouped by domain
-│       ├── engine/           # e.g. hello_update.py, newfunction.py (examples)
-│       ├── tools/
-│       └── server/
-│
-├── about/                    # Site identity
-│   ├── about.json            # title + subtitle served by GET /api/about
-│   └── set_title.py          # Edits about.json + 'apply'/'snapshot'/'restore' triggers
-│
-├── config/
-│   └── models.json           # AUTO-GENERATED at startup from installed Ollama models
-├── docs/
-│   ├── CHANGELOG.md          # Every recent change
-│   ├── RESTRUCTURE_README.md # History of the current package layout
-│   ├── 01_IDEA_AND_ARCHITECTURE.md       # Modular Interface architecture design
-│   ├── APP_STRUCTURE.md      # AUTO-GENERATED folder-tree snapshot
-│   └── APP_CODE_SNAPSHOT.md  # AUTO-GENERATED per-file source snapshot
-├── current-known-good-copy/  # GENERATED restore baseline: complete copy of the
-│                             # last good source (python about/set_title.py snapshot)
-├── data/                     # RUNTIME data (gitignored): chatlog, RAG store,
-│                             # interface_archive/, snapshots/pre_restore_backup/
-├── requirements.txt
-└── README.md
+â”œâ”€â”€ server/                   # Thin glue: FastAPI app + chat log + path config
+â”‚   â”œâ”€â”€ server.py             # HTTP endpoints, static mount, lifespan. The ONLY
+â”‚   â”‚                         # thing the browser talks to. `python server.py`
+â”‚   â”‚                         # runs from any directory.
+â”‚   â”œâ”€â”€ paths.py              # Config-driven runtime path authority: dataDir /
+â”‚   â”‚                         # chatSavePath / ragDbPath (incl. per-OS
+â”‚   â”‚                         # *Linux overrides) / RAG switches.
+â”‚   â””â”€â”€ chat_store/           # Server-side chat session + chat log
+â”‚       â”œâ”€â”€ store.py          # ensure_session / append_turn / finalize_session,
+â”‚       â”‚                     # the one-active-chat state, .txt transcripts,
+â”‚       â”‚                     # chatRecord.jsonl (create/read/delete).
+â”‚       â””â”€â”€ logger.py         # Small helpers the store uses to log rows.
+â”‚
+â”œâ”€â”€ engine/                   # The agent engine
+â”‚   â”œâ”€â”€ core/
+â”‚   â”‚   â”œâ”€â”€ agent.py          # AgentProfile + the reusable Agent: think/act/observe
+â”‚   â”‚   â”œâ”€â”€ llm.py            # ask_llm(), model resolution (fallback to a
+â”‚   â”‚   â”‚                     # detected model), context window, Ollama scan
+â”‚   â”‚   â””â”€â”€ prompt.py         # PromptManager: agent.md sections + tools -> system prompt
+â”‚   â”œâ”€â”€ agents/
+â”‚   â”‚   â”œâ”€â”€ loader.py         # Read/parse engine/agent_library/{id}/agent.md + agent.json,
+â”‚   â”‚   â”‚                     # save_markdown / save_meta / save_tests (Settings page).
+â”‚   â”‚   â”œâ”€â”€ registry.py       # Scans engine/agent_library/ -> available agents.
+â”‚   â”‚   â””â”€â”€ factory.py        # build_agent(agent_id, model) -> ready-to-use Agent.
+â”‚   â””â”€â”€ agent_library/        # THE AGENTS - filesystem is the source of truth
+â”‚       â”œâ”€â”€ basic_chat/       # agent.md + agent.json  (mode: chat, no tools)
+â”‚       â”œâ”€â”€ dev_assistant/    # agent.md + agent.json  (mode: agent, tools)
+â”‚       â”œâ”€â”€ problem_discovery_agent/  # agent.md + agent.json (mode: agent)
+â”‚       â””â”€â”€ rag_assistant/    # agent.md + agent.json  (mode: agent, chat-memory search)
+â”‚
+â”œâ”€â”€ tools/                    # Capabilities available to agents (per-agent IDs)
+â”‚   â”œâ”€â”€ registry.py           # TOOL_REGISTRY: tool ID -> Python function; resolve_tools/get_session
+â”‚   â”œâ”€â”€ state.py              # FileSession: shared/persisted file-working state
+â”‚   â””â”€â”€ tools.py              # map_files, read_file, write_text_file, delete_files,
+â”‚                             # get_current_date, tell_me_the_date_and_time, search_chat_logs
+â”‚
+â”œâ”€â”€ memory/                   # RAG memory store
+â”‚   â”œâ”€â”€ ingest.py             # Transcript chunking (ingest_file / ingest_directory)
+â”‚   â”œâ”€â”€ search.py             # RAGStorage: Chroma store + fallback vector DB
+â”‚   â”œâ”€â”€ main.py               # Standalone RAG CLI / cognitive loop experiment
+â”‚   â””â”€â”€ rag_commit.py         # status / rebuild_store / purge_store for the store
+â”‚
+â”œâ”€â”€ dashboard/                # Frontend (was "static/")
+â”‚   â”œâ”€â”€ index.html            # UI shell: agent cards + floating chat widget
+â”‚   â”œâ”€â”€ chat.html             # Standalone self-contained chat page
+â”‚   â”œâ”€â”€ config.html           # THE consolidated settings page (see above)
+â”‚   â”œâ”€â”€ config/               # app_settings.json (frontend-owned settings storage)
+â”‚   â”œâ”€â”€ css/styles.css
+â”‚   â””â”€â”€ js/
+â”‚       â”œâ”€â”€ app.js            # index.html boot module (widget, sessions, agents)
+â”‚       â”œâ”€â”€ config-page.js    # config.html boot module (all settings sections)
+â”‚       â”œâ”€â”€ api/api.js        # All HTTP calls (chats, settings, agents, RAG, ...)
+â”‚       â”œâ”€â”€ classes/          # chat-window.js (widget UI), ChatSession.js (state)
+â”‚       â”œâ”€â”€ logic/            # models.js (model dropdown), chat-formatter.js
+â”‚       â””â”€â”€ ui/               # markdown.js, appearance.js, config-form.js,
+â”‚                             # agents.js, agent-editor.js, header-nav.js,
+â”‚                             # interface-indicator.js, interface-manager.js
+â”‚
+â”œâ”€â”€ scripts/                  # CLI utilities
+â”‚   â”œâ”€â”€ rebuild_rag.py        # python scripts/rebuild_rag.py [build|purge|status]
+â”‚   â”œâ”€â”€ version_chats.py      # list | import | bump | versioning on|off
+â”‚   â””â”€â”€ update_docs.py        # Regenerates APP_STRUCTURE.md + APP_CODE_SNAPSHOT.md
+â”‚
+â”œâ”€â”€ interface/                # Modular update & restore layer (no core edits needed)
+â”‚   â”œâ”€â”€ update_manager.py     # Discover/import interface/updates/<domain>/*.py
+â”‚   â”‚                         # get_active_module() + move_module_to_external_archive()
+â”‚   â”œâ”€â”€ interface_dispatcher.py  # trace_and_execute(): logs caller file+line
+â”‚   â”œâ”€â”€ restore_manager.py    # Baseline compare/restore + snapshot_baseline()
+â”‚   â””â”€â”€ updates/              # Active update modules, grouped by domain
+â”‚       â”œâ”€â”€ engine/           # e.g. hello_update.py, newfunction.py (examples)
+â”‚       â”œâ”€â”€ tools/
+â”‚       â””â”€â”€ server/
+â”‚
+â”œâ”€â”€ about/                    # Site identity
+â”‚   â”œâ”€â”€ about.json            # title + subtitle served by GET /api/about
+â”‚   â””â”€â”€ set_title.py          # Edits about.json + 'apply'/'snapshot'/'restore' triggers
+â”‚
+â”œâ”€â”€ config/
+â”‚   â””â”€â”€ models.json           # AUTO-GENERATED at startup from installed Ollama models
+â”œâ”€â”€ docs/
+â”‚   â”œâ”€â”€ CHANGELOG.md          # Every recent change
+â”‚   â”œâ”€â”€ RESTRUCTURE_README.md # History of the current package layout
+â”‚   â”œâ”€â”€ 01_IDEA_AND_ARCHITECTURE.md       # Modular Interface architecture design
+â”‚   â”œâ”€â”€ APP_STRUCTURE.md      # AUTO-GENERATED folder-tree snapshot
+â”‚   â””â”€â”€ APP_CODE_SNAPSHOT.md  # AUTO-GENERATED per-file source snapshot
+â”œâ”€â”€ current-known-good-copy/  # GENERATED restore baseline: complete copy of the
+â”‚                             # last good source (python about/set_title.py snapshot)
+â”œâ”€â”€ data/                     # RUNTIME data (gitignored): chatlog, RAG store,
+â”‚                             # interface_archive/, snapshots/pre_restore_backup/
+â”œâ”€â”€ requirements.txt
+â””â”€â”€ README.md
 ```
+
+> **Keep the docs fresh:** `docs/APP_STRUCTURE.md` and `docs/APP_CODE_SNAPSHOT.md`
+> are generated, not hand-maintained. After code changes run
+> `venv/bin/python scripts/update_docs.py` and commit the regenerated files.
 
 ## How an answer is produced
 
 ```
 Browser
-  ↓ POST /api/chat {message, model, agent_id, history, session_id, title, new_chat, rag}
+  â†“ POST /api/chat {message, model, agent_id, history, session_id, title, new_chat, rag}
 server.py
-  ↓ chat_store.ensure_session()          server/chat_store/store.py (ONE active chat)
-  ↓ build_agent(agent_id)                engine/agents/factory.py
+  â†“ chat_store.ensure_session()          server/chat_store/store.py (ONE active chat)
+  â†“ build_agent(agent_id)                engine/agents/factory.py
 loader: agent.md + agent.json            engine/agents/loader.py
 tools:  IDs -> functions                 tools/registry.py
 prompt: sections + tool docs -> system msg   engine/core/prompt.py
-  ↓
+  â†“
 Agent.think()                            engine/core/agent.py
-  ↓ ask_llm()                            engine/core/llm.py
+  â†“ ask_llm()                            engine/core/llm.py
 Ollama
-  ↓
+  â†“
 server.py appends the turn to the active chat and returns {reply, session_id, title}
-  ↓ (on "Save chat" / new chat)
+  â†“ (on "Save chat" / new chat)
 chat_store.finalize_session() writes data/chatlog/agent-text-records/<title>[-v].txt
 + logs it in data/chatlog/chatRecord.jsonl
 ```
+
+### Model selection
+
+- `config/models.json` is **auto-scanned at startup** (`refresh_models()`) from
+  THIS machine's Ollama â€” it always mirrors what is installed, and the model
+  dropdown only lists detected models.
+- A requested model that is **not installed** (for example a per-agent pin or
+  default written on another OS) is never used blindly: the server logs an
+  `[ask_llm]` warning and falls back to a detected model instead of failing
+  with a 404. So Windows-authored settings keep working on Linux or any
+  machine, regardless of its Ollama install.
+- Agents that use tools get a model Ollama reports as **`tools`-capable** when
+  possible (confirmed no-tools models are skipped). Only if no tool-capable
+  model exists does the agent answer without tool use.
+- Empty `defaultModel` (`""`) means "resolve to the first detected model" â€”
+  changes to your defaults apply after a server restart.
 
 ## Chats: one server-side session at a time
 
@@ -254,12 +292,12 @@ and end):
   turn).
 - Ending a chat (`POST /api/chats/end`, the "Save chat" button, or starting a
   new chat) writes ONE transcript per chat to
-  `data/chatlog/agent-text-records/<title>.txt` — and on a name collision the
+  `data/chatlog/agent-text-records/<title>.txt` â€” and on a name collision the
   NEXT version (`<title>-2.txt`, ...). Re-saving a chat you kept typing in
   produces the next version; old versions stay on disk.
 - `data/chatlog/chatRecord.jsonl` is the LOG of those transcripts (title, agent,
   model, version, message/interaction counts, timestamps) used by the frontend
-  drop-down — one line per chat VERSION; the drop-down shows the newest version
+  drop-down â€” one line per chat VERSION; the drop-down shows the newest version
   of each chat. Existing `.txt` files are imported into the log once at startup.
 
 Version helpers: `python scripts/version_chats.py list | import | bump
@@ -267,8 +305,8 @@ Version helpers: `python scripts/version_chats.py list | import | bump
 
 Agent modes:
 
-- `chat`  — User → LLM → Response. The factory attaches no tools, so no tool loop can happen.
-- `agent` — User → Agent → LLM → Tool? → Observation → LLM → Response. Same `Agent` class; only its configuration differs.
+- `chat`  â€” User â†’ LLM â†’ Response. The factory attaches no tools, so no tool loop can happen.
+- `agent` â€” User â†’ Agent â†’ LLM â†’ Tool? â†’ Observation â†’ LLM â†’ Response. Same `Agent` class; only its configuration differs.
 
 ## API
 
@@ -283,10 +321,10 @@ Agent modes:
 | `GET /api/interface/status` | Interface status: module catalog, archive, trace-log tail, baseline + drift |
 | `POST /api/interface/apply` | Reload update modules from disk + regenerate the docs snapshots |
 | `POST /api/interface/snapshot` | Publish the current tree as the new known-good baseline |
-| `POST /api/interface/restore` | `{baseline?, apply?, dryRun?}` — roll back (dry-run by default) |
+| `POST /api/interface/restore` | `{baseline?, apply?, dryRun?}` â€” roll back (dry-run by default) |
 | `POST /api/interface/run` | Execute an update-module function (`{domain, module, function, args?, kwargs?}`) |
-| `POST /api/interface/toggle-run` | `{enabled}` — arm/disarm module execution for the process |
-| `POST /api/chat` | `{message, model, agent_id, history, session_id?, title?, new_chat?, rag?}` → `{reply, session_id, title}` |
+| `POST /api/interface/toggle-run` | `{enabled}` â€” arm/disarm module execution for the process |
+| `POST /api/chat` | `{message, model, agent_id, history, session_id?, title?, new_chat?, rag?}` â†’ `{reply, session_id, title}` |
 | `GET /api/chats` | Chat log + the active chat (feeds the chats drop-down) |
 | `GET /api/chats/{id}` | One chat: log row + `.txt` content + parsed messages |
 | `POST /api/chats/end` | Finalize the active chat into a versioned `.txt` + log it (`rag` bool overrides committing it to memory) |
@@ -300,7 +338,7 @@ Agent modes:
 | `GET/POST /api/settings` | The stored browser defaults (`dashboard/config/app_settings.json`) |
 | `POST /api/exports` | Save one wizard prompt as `{name}.md` + `{name}.json` (data/exports) |
 
-There is no `/api/activity` endpoint anymore — the Agent Monitor feature was
+There is no `/api/activity` endpoint anymore â€” the Agent Monitor feature was
 removed (see `docs/CHANGELOG.md`). Anything polling it will get a 404.
 
 ### RAG memory store
@@ -312,20 +350,28 @@ Saved chats can be committed to a persistent RAG store so agents using the
   sending/saving (both the index.html flyout and the standalone `chat.html`
   page have it).
 - **Default:** the "Commit saved chats to memory by default" toggle in
-  Configuration → RAG memory (`rag.commitOnSave`).
+  Configuration â†’ RAG memory (`rag.commitOnSave`).
 - **Auto-loading:** when the store is empty, the first search ingests every
   transcript automatically unless "Auto-load transcripts..." is off
   (`rag.autoIngest`).
-- **Paths:** Configuration → Data folder / RAG database path / Chat save path,
+- **Paths:** Configuration â†’ Data folder / RAG database path / Chat save path,
   stored in `dashboard/config/app_settings.json` and resolved by
   `server/paths.py` (absolute paths are used verbatim; relative paths resolve
-  against the project root). Path changes apply after a server restart — the
+  against the project root). Path changes apply after a server restart â€” the
   configuration page shows a "restart the server" banner until you do.
   Transcripts follow **Chat save path**, not the Data folder; blank means
   `<dataDir>/chatlog/agent-text-records`.
+- **Cross-platform paths:** the same settings file works on Windows *and*
+  Linux. Add `dataDirLinux`, `chatSavePathLinux` and `ragDbPathLinux` (set
+  from Configuration â†’ "Linux paths" on a non-Windows machine) to point the
+  app at a second, Linux-specific layout; each override falls back to a
+  project default when blank. A Windows-only drive path (`E:\data\...`) left
+  without a Linux override is ignored on Linux rather than becoming a literal
+  `E:\data\...` folder. `GET /api/settings` and `GET /api/rag/status` both
+  report the detected `platform` (`"win"` / `"nix"`).
 - **Manual maintenance:** `python scripts/rebuild_rag.py [build|purge|status]`,
   the "Rebuild memory"/"Forget everything" buttons in Configuration, or the
-  "Clear Memory" button in the chat header (`chat.html`) — clear resets the
+  "Clear Memory" button in the chat header (`chat.html`) â€” clear resets the
   store to zero entries.
 
 The store lives at `data/rag_db/chroma.sqlite3` by default. The store keeps
@@ -336,7 +382,7 @@ working until you wipe it.
 
 No Python required: create a folder under `engine/agent_library/` containing
 `agent.json` (configuration) + `agent.md` (behavior), pick tool IDs, and
-refresh — the agent appears automatically in `GET /api/agents` and the frontend
+refresh â€” the agent appears automatically in `GET /api/agents` and the frontend
 selector.
 
 Full field reference, tool catalog, copy-paste example, and troubleshooting:
@@ -346,7 +392,7 @@ guide was removed).
 
 ## Adding a new tool
 
-1. Write the function in `tools/tools.py` with a clear docstring — Ollama turns
+1. Write the function in `tools/tools.py` with a clear docstring â€” Ollama turns
    docstrings into the tool schema the LLM sees.
 2. Add one line to `TOOL_REGISTRY` in `tools/registry.py`.
 3. Reference the ID in any agent's `agent.json`.
@@ -358,7 +404,7 @@ New or experimental logic can live outside the core modules under
 in the core app is edited.
 
 - **Add a feature**: drop a `.py` file in `interface/updates/<domain>/`, then
-  `python about/set_title.py apply` — it is discovered, imported, and the
+  `python about/set_title.py apply` â€” it is discovered, imported, and the
   docs snapshots are regenerated. `apply --snapshot` also refreshes the
   baseline.
 - **Use it natively (Option B)**:
@@ -402,23 +448,24 @@ when the baseline has drifted) and links back to that card.
 Module execution from the UI is **disabled by default**: the card's
 "Enable module execution" toggle arms `/api/interface/run` (backed server-side
 by `INTERFACE_RUN_ENABLED`, flipped via `/api/interface/toggle-run`). On by
-your own risk — it runs arbitrary functions from `interface/updates/`.
+your own risk â€” it runs arbitrary functions from `interface/updates/`.
 
 ## Recent changes
 
 See **[docs/CHANGELOG.md](docs/CHANGELOG.md)** for the full history. The most
-recent entry covers the cross-platform path system (`GENESSIS_*` env overrides,
-automatic Windows-path handling on Linux/macOS/Chromebook) plus the "Settings
-saved" response window. Earlier entries cover the Modular Interface wiring
-(`/api/interface/*` + the Settings card), the Agent Monitor removal, and the
-recovery of `engine/core/agent.py` + `server/server.py` to their working
-originals.
+recent entry covers the cross-platform path system â€” per-OS path keys for
+Windows/Linux/macOS plus `GENESSIS_*` environment overrides (each machine picks
+its own folder, so one settings file travels between OSes), the "Settings saved"
+response window, resilient model selection, and the Modular Interface wiring
+(`/api/interface/*` + the Settings card). Earlier entries cover the Agent Monitor
+removal, and the recovery of `engine/core/agent.py` + `server/server.py` to their
+working originals.
 
 Recovery artifacts to be aware of:
 
-- `current-known-good-copy/` — the generated restore baseline (see the Modular
+- `current-known-good-copy/` â€” the generated restore baseline (see the Modular
   Interface section above). Not part of the running app.
-- `server/server.py.infected.bak` and `engine/core/agent.py.infected.bak` —
+- `server/server.py.infected.bak` and `engine/core/agent.py.infected.bak` â€”
   copies of the pre-rollback monitor-era files, kept in case you need to
   diff/inspect them.
 
@@ -430,6 +477,11 @@ Recovery artifacts to be aware of:
   FastAPI's threadpool instead of stalling the event loop.
 - Chat transcripts live in `data/chatlog/agent-text-records/` as `.txt` files;
   `data/chatlog/chatRecord.jsonl` is the header log that points at them.
+- **`ModuleNotFoundError: No module named 'fastapi'`** when starting the
+  server means the shell is not using the project venv. Linux has no bare
+  `python` â€” activate it (`source venv/bin/activate`) or launch directly
+  (`venv/bin/python server/server.py`).
+
 ```
 
 ## about/set_title.py
@@ -574,10 +626,10 @@ if __name__ == "__main__":
 {
   "models": [
     {
-      "id": "llama3.1:8b",
-      "name": "llama3.1:8b",
+      "id": "llama3:latest",
+      "name": "llama3:latest",
       "source": "ollama",
-      "size": 4920753328
+      "size": 4661224676
     },
     {
       "id": "nomic-embed-text:latest",
@@ -586,16 +638,22 @@ if __name__ == "__main__":
       "size": 274302450
     },
     {
+      "id": "llama3.2:1b",
+      "name": "llama3.2:1b",
+      "source": "ollama",
+      "size": 1321098329
+    },
+    {
       "id": "qwen2.5-coder:latest",
       "name": "qwen2.5-coder:latest",
       "source": "ollama",
       "size": 4683087561
     },
     {
-      "id": "gemma4:e2b",
-      "name": "gemma4:e2b",
+      "id": "gemma4:e4b",
+      "name": "gemma4:e4b",
       "source": "ollama",
-      "size": 7162405886
+      "size": 9608350718
     }
   ]
 }
@@ -6405,6 +6463,29 @@ code {
     background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
 }
 
+#config-section .os-path-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 8px 0 18px;
+}
+
+#config-section .os-path-group-title {
+    flex: 0 0 100%;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text, #1c2024);
+}
+
+#config-section .os-path-group .field {
+    flex: 1 1 220px;
+}
+
+#config-section .os-path-group .os-path-current span {
+    color: var(--color-primary, #2b6fdb);
+    font-weight: 600;
+}
+
 .chat-tests-toolbar {
     display: flex;
     align-items: center;
@@ -7540,14 +7621,17 @@ export async function loadAppSettings() {
 
 /**
  * Load settings plus the meta flags from /api/settings.
- * Returns { settings, restartNeeded } where restartNeeded is true when the
- * stored path settings changed since the server started (restart required).
+ * Returns { settings, restartNeeded, platform } where restartNeeded is true
+ * when the stored path settings changed since the server started (restart
+ * required) and platform is "win", "linux" or "mac" (which path fields to
+ * highlight).
  */
 export async function loadAppSettingsWithMeta() {
     const data = await request("/api/settings");
     return {
         settings: data.settings || {},
         restartNeeded: Boolean(data.restartNeeded),
+        platform: data.platform || "nix",
     };
 }
 
@@ -7557,7 +7641,7 @@ export async function saveAppSettings(partialSettings) {
         method: "POST",
         body: JSON.stringify(partialSettings),
     });
-    return data.settings || {};
+    return data;
 }
 
 /**
@@ -9655,9 +9739,11 @@ async function boot() {
     models = loadedModels || [];
     tools = loadedTools || [];
     let restartNeeded = false;
+    let platform = "nix";
     if (loadedMeta) {
         settings = loadedMeta.settings || {};
         restartNeeded = Boolean(loadedMeta.restartNeeded);
+        platform = loadedMeta.platform || "nix";
     }
 
     if (failures.length) {
@@ -9675,7 +9761,7 @@ async function boot() {
     }
 
     // ---- App-level form (default agent/model, paths, versioning, RAG) ----
-    const form = buildConfigForm({ agents, models, settings });
+    const form = buildConfigForm({ agents, models, settings, platform });
     mount.appendChild(form.root);
 
     wireDefaultAgentLink(form.root, agents);
@@ -9702,22 +9788,17 @@ async function boot() {
             statusEl.textContent = "Settings saved.";
             statusEl.className = "status-message ok";
 
-            // Response window: confirm + list any path fields that were
-            // cleared because they held non-portable Windows absolute paths.
+            // Response window: confirm the save + which platform's paths
+            // apply + restart hint when stored path settings changed.
             saveResponse.replaceChildren();
             saveResponse.hidden = false;
             saveResponse.appendChild(el("strong", "", "Settings saved \u2713"));
             const detail = el("ul", "save-response-detail", "");
-            const normalized = saved.normalized && saved.normalized.length ? saved.normalized : [];
-            normalized.forEach((key) => {
-                const label = { dataDir: "Data folder", chatSavePath: "Chat save path", ragDbPath: "RAG database path" }[key] || key;
-                detail.appendChild(el("li", "", label +
-                    " held a Windows path (e.g. E:\\data\\...) and was cleared \u2014 the default project-relative folder now applies. " +
-                    "Restart the server to move the data folders."));
-            });
-            if (!normalized.length) {
-                detail.appendChild(el("li", "", "All path settings are portable."));
-            }
+            const osLabel = platform === "win" ? "Windows" : (platform === "mac" ? "macOS" : "Linux");
+            const restartNeeded = Boolean(saved.restartNeeded);
+            detail.appendChild(el("li", "", "Using the " + osLabel +
+                " path settings" + (restartNeeded ? " \u2014 restart the server to apply path changes." : ".")));
+            detail.appendChild(el("li", "", "Each OS can point to its own folders; leave the ones you don't use alone. A GENESSIS_* env var overrides everything."));
             saveResponse.appendChild(detail);
         } catch (error) {
             statusEl.textContent = error.message;
@@ -9882,7 +9963,8 @@ function renderSharedTests(mount) {
             },
         };
         try {
-            settings = await saveAppSettings(payload);
+            const saved = await saveAppSettings(payload);
+            settings = saved.settings || settings;
         } catch (_) { /* the page re-renders with stored truth on reload */ }
     }
 }
@@ -11238,11 +11320,11 @@ export function renderAppearance({ mountEl, settings = {}, onSave }) {
         saveBtn.disabled = true;
         try {
             const updated = await saveAppSettings(payload);
-            applyAppearance(updated.appearance || payload.appearance);
+            applyAppearance((updated.settings && updated.settings.appearance) || payload.appearance);
             try {
                 localStorage.setItem("appearance-theme", themeSelect.value);
             } catch (_) { /* private mode - ignore */ }
-            if (typeof onSave === "function") onSave(updated);
+            if (typeof onSave === "function") onSave(updated.settings || updated);
             statusEl.textContent = "Appearance saved - both pages restart with it.";
             statusEl.style.color = "var(--color-success, #16803c)";
         } catch (error) {
@@ -11290,7 +11372,7 @@ function el(tag, className, text) {
  * @param {object} opts.settings   - stored app settings
  * @returns {{ root: HTMLElement, values: () => object }}
  */
-export function buildConfigForm({ agents = [], models = [], settings = {} }) {
+export function buildConfigForm({ agents = [], models = [], settings = {}, platform = "nix" }) {
     const root = document.createElement("div");
     root.className = "panel";
 
@@ -11341,6 +11423,59 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
         settings.ragDbPath || ""
     ));
 
+    // ---- Per-OS paths (three choices: Windows / Linux / macOS) ----
+    // One settings file can carry a separate folder layout for Windows,
+    // Linux and macOS. The row for the machine you're on now is highlighted;
+    // OSes you don't use are left alone (blank = their project defaults).
+    const osHeading = document.createElement("h3");
+    osHeading.className = "config-section-heading";
+    osHeading.textContent = "Per-OS paths (Windows / Linux / macOS)";
+    root.appendChild(osHeading);
+
+    const osNote = document.createElement("p");
+    osNote.className = "config-note";
+    osNote.textContent =
+        "Each OS picks its own folders: the row for this machine wins, the " +
+        "plain fields above are the fallback, and a GENESSIS_DATA_DIR / " +
+        "GENESSIS_CHAT_SAVE_PATH / GENESSIS_RAG_DB_PATH environment variable " +
+        "overrides everything. Leave OSes you don't use alone. Changes apply " +
+        "after a server restart.";
+    root.appendChild(osNote);
+
+    const osRows = [
+        { suffix: "Windows", label: "Windows", current: platform === "win" },
+        { suffix: "Linux", label: "Linux", current: platform === "linux" },
+        { suffix: "Mac", label: "macOS", current: platform === "mac" },
+    ];
+    const pathGroups = [
+        { key: "dataDir", label: "Data folder", hint: "chat records, history, exports, transcripts + RAG by default" },
+        { key: "chatSavePath", label: "Chat save path", hint: "saved chat transcripts (.txt)" },
+        { key: "ragDbPath", label: "RAG database path", hint: "RAG memory store (chroma.sqlite3)" },
+    ];
+    for (const group of pathGroups) {
+        const wrap = document.createElement("div");
+        wrap.className = "os-path-group";
+        const title = document.createElement("div");
+        title.className = "os-path-group-title";
+        title.textContent = group.label + " \u2014 " + group.hint;
+        wrap.appendChild(title);
+        for (const os of osRows) {
+            const field = document.createElement("label");
+            field.className = "field" + (os.current ? " os-path-current" : "");
+            const span = document.createElement("span");
+            span.textContent = group.label + " (" + os.label + ")" + (os.current ? " \u2014 this machine" : "");
+            const input = document.createElement("input");
+            input.type = "text";
+            input.id = group.key + os.suffix + "-input";
+            input.placeholder = "absolute or project-relative folder (blank = default)";
+            input.value = settings[group.key + os.suffix] || "";
+            field.appendChild(span);
+            field.appendChild(input);
+            wrap.appendChild(field);
+        }
+        root.appendChild(wrap);
+    }
+
     // ---- Chat versioning toggle ----
     const versionField = document.createElement("label");
     versionField.className = "field field-toggle";
@@ -11388,7 +11523,7 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
     return {
         root,
         values() {
-            return {
+            const values = {
                 defaultAgentId: byId("default-agent-select").value,
                 defaultModel: byId("default-model-select").value,
                 chatSavePath: byId("chat-save-path").value.trim(),
@@ -11400,6 +11535,12 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
                     autoIngest: byId("rag-auto-ingest").checked,
                 },
             };
+            for (const suffix of ["Windows", "Linux", "Mac"]) {
+                values["dataDir" + suffix] = byId("dataDir" + suffix + "-input").value.trim();
+                values["chatSavePath" + suffix] = byId("chatSavePath" + suffix + "-input").value.trim();
+                values["ragDbPath" + suffix] = byId("ragDbPath" + suffix + "-input").value.trim();
+            }
+            return values;
         },
     };
 }
@@ -12658,7 +12799,7 @@ def secondary_engine_action(value: int):
 ```markdown
 # Terminator1 — App Structure
 
-_Auto-generated on 2026-09-12T18:12:53 by `scripts/update_docs.py`._
+_Auto-generated on 2026-09-12T18:28:23 by `scripts/update_docs.py`._
 
 
 ```
@@ -12780,60 +12921,89 @@ _74 tracked source file(s)._
 All notable changes to this project. Format based on Keep a Changelog
 (https://keepachangelog.com/), grouped by date.
 
-## 2026-09-12 — Cross-platform paths + save feedback + Linux/Chromebook support
+## 2026-09-12 — Cross-platform paths (Windows/Linux/macOS) + save feedback
 
-The app now works identically on Windows, Linux, macOS and the ChromeOS Linux
-container, and where data is saved can be changed without editing a file.
+The app now runs from the same checkout on Windows, Linux, macOS and the
+ChromeOS Linux container, and where data is saved can be changed without
+editing a file. (A merge combined a Windows-side `GENESSIS_*` env-var approach
+with the Chromebook-side per-OS-key approach, so both are supported.)
 
 ### Added — portable path resolution (`server/paths.py`)
 
+- **Per-OS path keys** in `dashboard/config/app_settings.json`: one settings
+  file can carry three layouts — the plain `dataDir` / `chatSavePath` /
+  `ragDbPath` plus `dataDirWindows` / `dataDirLinux` / `dataDirMac` (and the
+  matching chat/rag variants). The key for the CURRENT machine wins; keys for
+  OSes you do not use are left alone. Relative -> project root; absolute ->
+  used as-is; empty -> default.
 - **Env-var overrides** (highest precedence): `GENESSIS_DATA_DIR`,
   `GENESSIS_CHAT_SAVE_PATH`, `GENESSIS_RAG_DB_PATH` override the stored
-  settings; `~` and `$VAR` are expanded, so `~/genessis-data` works. Precedence
-  chain: env var -> `app_settings.json` -> project-relative `data/`.
-- **Cross-platform Windows-path guard**: stored absolute Windows paths
-  (`E:\data\...`, `\\server\share`) are detected and, on any non-Windows OS,
-  mapped to project-relative folders with a one-time warning (`E:\data\rag_store`
-  -> `<project>/data/rag_store`). Pure helper with injectable OS hint so it is
-  unit-testable for Linux/macOS semantics.
-- `server/paths.py` docstring + `about()` gained a `sources` map telling which
-  setting source resolved each key.
+  settings; `~` and `$VAR` are expanded, so `~/genessis-data` works.
+  Precedence chain: env var -> per-OS key -> plain key -> project-relative
+  `data/`.
+- **Windows drive-path guard**: a Windows absolute path (`E:\...`, `E:/...`,
+  `\\server\share`) in the plain key is ignored on non-Windows hosts when no
+  per-OS key is set — the app falls back to a project default instead of
+  creating a literal `E:\...` folder on Linux/macOS. `server.py`'s legacy
+  `/api/chat-save` resolver uses the same guard.
+- `platform()` now reports `win` / `linux` / `mac`; `about()` gained a
+  `sources` map telling which key or env var resolved each setting. Stray
+  `E:\data\rag_store` folders created by old resolutions were removed.
+- `.gitignore` — `[A-Z]:*` rule so accidental drive-letter folders can never
+  be tracked.
+
+### Added — resilient model selection
+
+- `engine/core/llm.py` — `_resolve_model()`: an uninstalled requested model is
+  dropped with an `[ask_llm]` warning and the first detected model is used
+  instead; tool-calling agents prefer a tools-capable detected model;
+  per-model capabilities are cached briefly; an explicit request is still
+  honoured when no models are visible.
+- `dashboard/config/app_settings.json` — `defaultModel` is `""` (resolves to
+  the first detected model; the user picks from the dropdown).
 
 ### Changed — save flow + startup visibility
 
-- `server/server.py` `/api/settings` — on save, any `dataDir`/`chatSavePath`/
-  `ragDbPath` that is a Windows absolute path is cleared to `""` and reported
-  in the response as `{normalized: [...]}`, so a settings file copied between
-  machines never carries machine-specific `E:\...` paths.
-- `server/server.py` `lifespan()` — prints the resolved data / chat records /
-  RAG folders at boot and flags which keys are env-overridden.
-- `dashboard/js/config-page.js` — save now shows a prominent green **"Settings
-  saved"** response window that also lists any path fields that were cleared
-  because they held Windows paths (plus the restart hint). `dashboard/config.html`
-  gained the `.save-response` styles.
-- `dashboard/config/app_settings.json` — `dataDir`, `chatSavePath`,
-  `ragDbPath` cleared to `""` (defaults / env vars now control storage).
+- `server/server.py` — `GET /api/settings` returns `platform`; save merges
+  without rewriting path values; `lifespan()` prints the resolved data / chat
+  records / RAG folders at boot and flags env-overridden keys.
+- `dashboard/js/ui/config-form.js` — an always-visible **per-OS paths** section
+  (Windows / Linux / macOS inputs for Data folder, Chat save path and RAG
+  database) with the current platform's row highlighted. `config-page.js` /
+  `api.js` pass the detected platform through.
+- `dashboard/js/config-page.js` — save shows a green **"Settings saved"**
+  response window with a restart hint when stored paths changed since boot.
+  `dashboard/config.html` gained the `.save-response` styles.
 
 ### Changed — docs
 
-- `README.md` — new "Running on Linux / macOS / ChromeOS (Chromebook)"
-  quickstart and "Changing where data is saved" (Settings vs env vars vs
-  defaults) sections; folder tree updated (`js/ui/` + removed `test/`); the
-  deleted `docs/documentation_CREATING_AGENTS.md` link replaced; "Recent
-  changes" points at the current entry.
-- `docs/RESTRUCTURE_README.md` — `test/` and the deleted agent-authoring doc
+- `README.md` — "Running on Linux / macOS / ChromeOS (Chromebook)" quickstart,
+  "Changing where data is saved" (per-OS keys vs env vars vs defaults) and
+  "Model selection" sections; folder tree updated (`js/ui/` added, `test/`
+  removed); the deleted `docs/documentation_CREATING_AGENTS.md` link replaced;
+  "Recent changes" points at the current entry.
+- `docs/RESTRUCTURE_README.md` — `test/` + the deleted agent-authoring doc
   removed from the tree; portable-`paths.py` note added under "Launching".
 
 ### Verified
 
-- Path unit tests (forged posix semantics): drive/UNC detection; mapping
-  `E:\data\rag_store` -> `data/rag_store` and UNC -> relative; unchanged on
-  Windows and for POSIX absolute paths; env override wins over stored settings;
-  `$HOME`/`~` expansion; `about()["sources"]` populated.
-- `/api/settings` returns `{settings, normalized}` and clears Windows paths.
+- Path unit tests (forged Linux/macOS semantics): drive/UNC detection;
+  per-OS key selection; env override wins over stored settings; `$HOME`/`~`
+  expansion; `about()["sources"]` populated.
+- `/api/settings` returns `{settings, restartNeeded, platform}` and merges
+  cleanly.
 - uvicorn boot with `GENESSIS_DATA_DIR` set to a temp folder: boot log shows
-  data/records/rag all under the override and `dataDir overridden by
-  GENESSIS_DATA_DIR`; `/api/rag/status` 200.
+  data/records/rag under the override; `/api/rag/status` 200.
+
+## 2026-09-12 — AI-readable app snapshot docs
+
+The whole app is readable as two auto-generated markdown files an AI can
+ingest: `docs/APP_STRUCTURE.md` (file/folder tree) and
+`docs/APP_CODE_SNAPSHOT.md` (every source file's name and full contents).
+Both are produced by `scripts/update_docs.py`; refresh them after any
+meaningful change with `venv/bin/python scripts/update_docs.py` (the walk
+skips `test/`, `venv/`, `.git/`, `data/`, `__pycache__/` and `*.bak`/`*.pyc`
+so the snapshot spans only the running app).
 
 ## 2026-09-12 — Frontend wiring for the interface system + title propagation
 
@@ -13074,95 +13244,98 @@ project root), and `venv\Scripts\python -m uvicorn server.server:app` (root).
 ## docs/RESTRUCTURE_README.md
 
 ```markdown
-# Terminator1 — Reorganized Layout
+﻿# Terminator1 â€” Reorganized Layout
 
 This is your original app, regrouped into four clear domains. All import
-paths were rewritten to match — this isn't just a file shuffle, it's a
+paths were rewritten to match â€” this isn't just a file shuffle, it's a
 working package layout.
 
 ```
 terminator1/
-├── engine/                 # The agent factory ("engine")
-│   ├── core/
-│   │   ├── agent.py        # Agent runtime: think/act/observe loop
-│   │   ├── llm.py          # ask_llm(), model resolution, Ollama scan
-│   │   └── prompt.py       # agent.md sections + tools -> system prompt
-│   ├── agents/
-│   │   ├── loader.py       # Reads agent_library/{id}/agent.md + agent.json
-│   │   ├── registry.py     # Scans agent_library/ -> available agents
-│   │   └── factory.py      # build_agent(agent_id, model) -> ready Agent
-│   └── agent_library/      # Agent definitions (data, not code)
-│       ├── basic_chat/
-│       ├── dev_assistant/
-│       ├── problem_discovery_agent/
-│       └── rag_assistant/
-│
-├── tools/                  # Tools available to agents (per-agent capabilities)
-│   ├── registry.py         # TOOL_REGISTRY: tool IDs -> Python functions
-│   ├── state.py            # FileSession: shared/persisted file-working state
-│   └── tools.py            # map/read/write/delete + date/time + search tools
-│
-├── memory/                 # RAG memory store (was "rag/")
-│   ├── ingest.py           # Transcript chunking (ingest_file / ingest_directory)
-│   ├── search.py           # RAGStorage: Chroma store + fallback vector DB
-│   ├── main.py             # Standalone RAG CLI / cognitive loop experiment
-│   └── rag_commit.py       # Commit, purge, rebuild, status for the store
-│
-├── dashboard/               # Frontend (was "static/")
-│   ├── index.html          # Main UI shell (agent cards, floating chat)
-│   ├── chat.html           # Standalone self-contained chat page
-│   ├── config.html         # NEW: consolidated settings page (one place for
-│   │                       #      app defaults, appearance, every agent,
-│   │                       #      shared tests, models)
-│   ├── config/app_settings.json
-│   ├── css/styles.css
-│   └── js/
-│       ├── app.js
-│       ├── config-page.js  # NEW: boot module for config.html
-│       ├── api/api.js
-│       ├── classes/ (ChatSession.js, chat-window.js)
-│       ├── logic/  (models.js, chat-formatter.js)
-│       └── ui/     (markdown.js, agents.js, appearance.js, config-form.js,
-│                    agent-editor.js, header-nav.js,
-│                    interface-indicator.js,   # header "N updates" pill
-│                    interface-manager.js)     # Settings "Updates/Interface" card
-│
-├── server/                  # Thin glue: FastAPI app + chat log + path config
-│   ├── server.py            # HTTP endpoints, static mount, lifespan; also
-│   │                        # discovers interface/updates at startup and
-│   │                        # exposes update_manager + dispatcher on app.state;
-│   │                        # /api/interface/{status,apply,snapshot,restore,
-│   │                        # run,toggle-run} wire the UI to the update system
-│   ├── paths.py             # Config-driven runtime path authority
-│   └── chat_store/
-│       ├── logger.py
-│       └── store.py
-│
-├── config/
-│   └── models.json          # auto-generated model snapshot (the old
-│                            # settings.json is gone - one default now lives
-│                            # in app_settings.json#defaultAgentId)
-├── scripts/
-│   ├── rebuild_rag.py
-│   ├── version_chats.py
-│   └── update_docs.py        # NEW: regenerates APP_STRUCTURE.md + APP_CODE_SNAPSHOT.md
-├── interface/                # NEW: modular update & restore layer
-│   ├── update_manager.py     #    discover/import interface/updates/<domain>/*
-│   ├── interface_dispatcher.py  # trace_and_execute() caller line tracing
-│   ├── restore_manager.py    #    baseline compare/restore + snapshot_baseline()
-│   └── updates/              #    engine/ | tools/ | server/
-├── about/
-│   ├── about.json           # title/subtitle served by GET /api/about
-│   └── set_title.py         # + 'apply' / 'snapshot' / 'restore' CLI triggers
-├── docs/
-│   ├── CHANGELOG.md
-│   ├── RESTRUCTURE_README.md
-│   ├── 01_IDEA_AND_ARCHITECTURE.md   # NEW: design doc for the update/restore layer
-│   ├── APP_STRUCTURE.md              # AUTO-GENERATED
-│   └── APP_CODE_SNAPSHOT.md          # AUTO-GENERATED
-├── current-known-good-copy/ # GENERATED restore baseline (python about/set_title.py snapshot)
-├── requirements.txt
-└── README.md                 # Original project README (kept up to date)
+â”œâ”€â”€ engine/                 # The agent factory ("engine")
+â”‚   â”œâ”€â”€ core/
+â”‚   â”‚   â”œâ”€â”€ agent.py        # Agent runtime: think/act/observe loop
+â”‚   â”‚   â”œâ”€â”€ llm.py          # ask_llm(), model resolution (falls back to a
+â”‚   â”‚   â”‚                   # detected model; prefers tools-capable), Ollama scan
+â”‚   â”‚   â””â”€â”€ prompt.py       # agent.md sections + tools -> system prompt
+â”‚   â”œâ”€â”€ agents/
+â”‚   â”‚   â”œâ”€â”€ loader.py       # Reads agent_library/{id}/agent.md + agent.json
+â”‚   â”‚   â”œâ”€â”€ registry.py     # Scans agent_library/ -> available agents
+â”‚   â”‚   â””â”€â”€ factory.py      # build_agent(agent_id, model) -> ready Agent
+â”‚   â””â”€â”€ agent_library/      # Agent definitions (data, not code)
+â”‚       â”œâ”€â”€ basic_chat/
+â”‚       â”œâ”€â”€ dev_assistant/
+â”‚       â”œâ”€â”€ problem_discovery_agent/
+â”‚       â””â”€â”€ rag_assistant/
+â”‚
+â”œâ”€â”€ tools/                  # Tools available to agents (per-agent capabilities)
+â”‚   â”œâ”€â”€ registry.py         # TOOL_REGISTRY: tool IDs -> Python functions
+â”‚   â”œâ”€â”€ state.py            # FileSession: shared/persisted file-working state
+â”‚   â””â”€â”€ tools.py            # map/read/write/delete + date/time + search tools
+â”‚
+â”œâ”€â”€ memory/                 # RAG memory store (was "rag/")
+â”‚   â”œâ”€â”€ ingest.py           # Transcript chunking (ingest_file / ingest_directory)
+â”‚   â”œâ”€â”€ search.py           # RAGStorage: Chroma store + fallback vector DB
+â”‚   â”œâ”€â”€ main.py             # Standalone RAG CLI / cognitive loop experiment
+â”‚   â””â”€â”€ rag_commit.py       # Commit, purge, rebuild, status for the store
+â”‚
+â”œâ”€â”€ dashboard/               # Frontend (was "static/")
+â”‚   â”œâ”€â”€ index.html          # Main UI shell (agent cards, floating chat)
+â”‚   â”œâ”€â”€ chat.html           # Standalone self-contained chat page
+â”‚   â”œâ”€â”€ config.html         # NEW: consolidated settings page (one place for
+â”‚   â”‚                       #      app defaults, appearance, every agent,
+â”‚   â”‚                       #      shared tests, models)
+â”‚   â”œâ”€â”€ config/app_settings.json
+â”‚   â”œâ”€â”€ css/styles.css
+â”‚   â””â”€â”€ js/
+â”‚       â”œâ”€â”€ app.js
+â”‚       â”œâ”€â”€ config-page.js  # NEW: boot module for config.html
+â”‚       â”œâ”€â”€ api/api.js
+â”‚       â”œâ”€â”€ classes/ (ChatSession.js, chat-window.js)
+â”‚       â”œâ”€â”€ logic/  (models.js, chat-formatter.js)
+â”‚       â””â”€â”€ ui/     (markdown.js, agents.js, appearance.js, config-form.js,
+â”‚                    agent-editor.js, header-nav.js,
+â”‚                    interface-indicator.js,   # header "N updates" pill
+â”‚                    interface-manager.js)     # Settings "Updates/Interface" card
+â”‚
+â”œâ”€â”€ server/                  # Thin glue: FastAPI app + chat log + path config
+â”‚   â”œâ”€â”€ server.py            # HTTP endpoints, static mount, lifespan; also
+â”‚   â”‚                        # discovers interface/updates at startup and
+â”‚   â”‚                        # exposes update_manager + dispatcher on app.state;
+â”‚   â”‚                        # /api/interface/{status,apply,snapshot,restore,
+â”‚   â”‚                        # run,toggle-run} wire the UI to the update system
+â”‚   â”œâ”€â”€ paths.py             # Config-driven runtime path authority (dataDir /
+â”‚   â”‚                         # chatSavePath / ragDbPath, incl. per-OS Windows /
+â”‚   â”‚                         # Linux / macOS keys + GENESSIS_* env overrides)
+â”‚   â””â”€â”€ chat_store/
+â”‚       â”œâ”€â”€ logger.py
+â”‚       â””â”€â”€ store.py
+â”‚
+â”œâ”€â”€ config/
+â”‚   â””â”€â”€ models.json          # auto-generated model snapshot (the old
+â”‚                            # settings.json is gone - one default now lives
+â”‚                            # in app_settings.json#defaultAgentId)
+â”œâ”€â”€ scripts/
+â”‚   â”œâ”€â”€ rebuild_rag.py
+â”‚   â”œâ”€â”€ version_chats.py
+â”‚   â””â”€â”€ update_docs.py        # NEW: regenerates APP_STRUCTURE.md + APP_CODE_SNAPSHOT.md
+â”œâ”€â”€ interface/                # NEW: modular update & restore layer
+â”‚   â”œâ”€â”€ update_manager.py     #    discover/import interface/updates/<domain>/*
+â”‚   â”œâ”€â”€ interface_dispatcher.py  # trace_and_execute() caller line tracing
+â”‚   â”œâ”€â”€ restore_manager.py    #    baseline compare/restore + snapshot_baseline()
+â”‚   â””â”€â”€ updates/              #    engine/ | tools/ | server/
+â”œâ”€â”€ about/
+â”‚   â”œâ”€â”€ about.json           # title/subtitle served by GET /api/about
+â”‚   â””â”€â”€ set_title.py         # + 'apply' / 'snapshot' / 'restore' CLI triggers
+â”œâ”€â”€ docs/
+â”‚   â”œâ”€â”€ CHANGELOG.md
+â”‚   â”œâ”€â”€ RESTRUCTURE_README.md
+â”‚   â”œâ”€â”€ 01_IDEA_AND_ARCHITECTURE.md   # NEW: design doc for the update/restore layer
+â”‚   â”œâ”€â”€ APP_STRUCTURE.md              # AUTO-GENERATED
+â”‚   â””â”€â”€ APP_CODE_SNAPSHOT.md          # AUTO-GENERATED
+â”œâ”€â”€ current-known-good-copy/ # GENERATED restore baseline (python about/set_title.py snapshot)
+â”œâ”€â”€ requirements.txt
+â””â”€â”€ README.md                 # Original project README (kept up to date)
 ```
 
 ## Launching
@@ -13172,7 +13345,11 @@ top of the file adds the project root and drops the script's own folder so the
 `server` package is never shadowed). Equivalent launch from the project root:
 
 ```
+# Windows
 venv\Scripts\python -m uvicorn server.server:app
+
+# Linux
+venv/bin/python -m uvicorn server.server:app
 ```
 
 The app is cross-platform (Windows / Linux / macOS / ChromeOS Linux). All
@@ -13187,6 +13364,11 @@ where data is saved".
 > The Agent Monitor feature (`dashboard/monitor.html`, `dashboard/js/monitor.js`,
 > `server/activity.py` and the `/api/activity*` endpoints) was removed in
 > 2026-09-12. See `docs/CHANGELOG.md`.
+
+> Since 2026-09-12 the app also runs cross-platform: per-OS path overrides
+> (`dataDirLinux` / `chatSavePathLinux` / `ragDbPathLinux`) keep one settings
+> file working on Windows and Linux, and `engine/core/llm.py` falls back to a
+> detected model when a requested one is not installed. See `docs/CHANGELOG.md`.
 
 ## What changed under the hood
 
@@ -13224,7 +13406,7 @@ place: app defaults, appearance, every agent's metadata/behavior/tests
 - `engine.agents.registry.list_agents()` runs end-to-end and correctly
   discovers all four agents from `engine/agent_library/`.
 - The only remaining import failures are missing third-party packages
-  (`ollama`, `chromadb`, `docling`) — install with
+  (`ollama`, `chromadb`, `docling`) â€” install with
   `pip install -r requirements.txt`, then run:
 
   ```
@@ -13237,21 +13419,21 @@ place: app defaults, appearance, every agent's metadata/behavior/tests
 ## Note on scope
 
 This reorganization is based on `APP_SNAPSHOT.md` (the v1-11 era of your
-project — before "Genessis Step 1/2" added `app/core/environment.py`,
+project â€” before "Genessis Step 1/2" added `app/core/environment.py`,
 `app/core/project_creator.py`, `app/contracts/`, and `app/engine/`). If
 you want those newer modules folded into this same layout, upload the
 current `APP_SNAPSHOT.md` (or the actual project files) for
 `app/core/environment.py`, `app/core/project_creator.py`,
-`app/contracts/*`, and `app/engine/*`, and I'll fold them in — they'd
+`app/contracts/*`, and `app/engine/*`, and I'll fold them in â€” they'd
 naturally slot into `engine/` (project provisioning) and a new
 `engine/contracts/` (the host class-library contracts) respectively.
 
 ## About the "dashboard" idea
 
 The frontend files are copied over as-is (functionally identical, just
-relocated). If you want an actual visual refresh — nicer typography, a
+relocated). If you want an actual visual refresh â€” nicer typography, a
 real dashboard layout with sidebar navigation between agents/memory/tools
-status — say the word and I'll rework `dashboard/index.html` +
+status â€” say the word and I'll rework `dashboard/index.html` +
 `styles.css` on top of this structure rather than just relocating files.
 
 ```
@@ -13270,11 +13452,8 @@ status — say the word and I'll rework `dashboard/index.html` +
   "name": "Basic Chat",
   "description": "A simple chatbot with no tools.",
   "mode": "agent",
-  "model": "qwen2.5-coder:latest",
-  "tools": [
-    "map_files",
-    "read_file"
-  ]
+  "model": "llama3:latest",
+  "tools": []
 }
 ```
 
@@ -14519,6 +14698,7 @@ The Agent does not know about Ollama details; it only calls ask_llm().
 """
 
 import json
+import time
 from pathlib import Path
 from typing import Callable, List
 
@@ -14527,45 +14707,141 @@ import ollama
 MAX_NUM_CTX = 32768
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
 
+# How long a successful Ollama model scan is trusted before we re-list.
+_MODEL_SCAN_TTL = 60.0
+_model_scan_cache = {"at": -1.0, "ids": []}  # ordered list of installed model ids
+
 
 # ==========================================================================
 # MODEL RESOLUTION AND CONTEXT SIZING
 # ==========================================================================
 
-def _resolve_model(model: str | None) -> str:
-    """Pick which model to use: explicit arg > config > Ollama list."""
-    if model:
-        print(f"[ask_llm] explicit model used: {model}")
-        return model
-
+def _config_model_ids() -> list:
+    """The model ids in config/models.json (re-scanned by refresh_models() at
+    every server startup, so it reflects THIS machine's Ollama)."""
     try:
         data = json.loads((CONFIG_DIR / "models.json").read_text(encoding="utf-8"))
-        models = data.get("models", [])
-        if models:
-            cfg = models[0].get("id")
-            if cfg:
-                print(f"[ask_llm] model from config/models.json: {cfg}")
-                return cfg
+        return [m.get("id") for m in data.get("models", []) if m.get("id")]
     except (OSError, json.JSONDecodeError):
-        pass
+        return []
 
+
+def _installed_model_ids() -> list:
+    """Ordered ids of installed Ollama models, cached briefly.
+
+    A failed scan keeps the previous snapshot (or [] when there was none),
+    so "no models visible" and "Ollama unreachable" stay distinguishable.
+    """
+    global _model_scan_cache
+    now = time.monotonic()
+    if _model_scan_cache["ids"] and now - _model_scan_cache["at"] < _MODEL_SCAN_TTL:
+        return _model_scan_cache["ids"]
     try:
-        data = ollama.list()
-        names = [
-            m.get("model") if isinstance(m, dict) else getattr(m, "model", None)
-            for m in data.get("models", [])
-        ]
-        names = [n for n in names if n]
-        if names:
-            print(f"[ask_llm] first installed Ollama model: {names[0]}")
-            return names[0]
-    except Exception as exc:
-        print(f"[ask_llm] Ollama list failed: {exc}")
+        ids = []
+        for m in ollama.list().get("models", []):
+            mid = m.get("model") if isinstance(m, dict) else getattr(m, "model", None)
+            if mid and mid not in ids:
+                ids.append(mid)
+        _model_scan_cache = {"at": now, "ids": ids}
+    except Exception:
+        pass  # keep whatever we had before
+    return _model_scan_cache["ids"]
 
-    raise RuntimeError(
-        "No model available. Specify one in the frontend, "
-        "add models to config/models.json, or install one in Ollama."
-    )
+
+# Per-model capabilities (ollama.show), cached per process. None = unknown
+# (older Ollama that does not report capabilities yet).
+_cap_cache: dict = {}
+
+
+def _capabilities(model: str) -> list | None:
+    """The reported capabilities for `model` (['completion', 'tools', ...])."""
+    if model in _cap_cache:
+        return _cap_cache[model]
+    try:
+        info = ollama.show(model=model).model_dump()
+        caps = info.get("capabilities") or []
+        _cap_cache[model] = caps
+        return caps
+    except Exception:
+        _cap_cache[model] = None
+        return None
+
+
+def _supports_tools(model: str) -> bool | None:
+    """True/False when Ollama reports capabilities, None when unknown."""
+    caps = _capabilities(model)
+    if caps is None:
+        return None
+    return "tools" in caps
+
+
+def _resolve_model(model: str | None, require_tools: bool = False) -> str:
+    """Pick which model to use: explicit arg (when suitable) > config > Ollama list.
+
+    An explicitly requested model that is NOT installed on this machine is
+    dropped so the app falls back to a detected one instead of erroring with
+    a 404 - this keeps settings written on one OS (e.g. Windows) from
+    breaking the app on another (e.g. Linux). When no models are visible at
+    all, the explicit request is honoured as-is (previous behaviour).
+
+    `require_tools`: when the caller needs tool calling, models that Ollama
+    reports as NOT supporting tools are skipped so an agent with tools never
+    gets a model that Ollama will reject with 400.
+    """
+    explicit = None
+    if model:
+        detected = set(_config_model_ids()) | set(_installed_model_ids())
+        if model in detected:
+            explicit = model
+        elif detected:
+            print(
+                f"[ask_llm] requested model '{model}' is not installed locally - "
+                "falling back to a detected model"
+            )
+        else:
+            print(f"[ask_llm] no installed models visible - using requested '{model}' as-is")
+            return model
+
+    # Ordered candidates: explicit > config/models.json > live Ollama scan.
+    candidates = []
+    if explicit:
+        candidates.append(explicit)
+    for m in _config_model_ids():
+        if m not in candidates:
+            candidates.append(m)
+    for m in _installed_model_ids():
+        if m not in candidates:
+            candidates.append(m)
+
+    if require_tools:
+        # Prefer models that definitely support tools; keep "unknown" ones as a
+        # last resort (older Ollama), push confirmed-no-tools models to the end.
+        tooled = [c for c in candidates if _supports_tools(c) is True]
+        unknown = [c for c in candidates if _supports_tools(c) is None]
+        others = [c for c in candidates if c not in tooled and c not in unknown]
+        ordered = tooled + unknown + others
+        if explicit and others and explicit in others:
+            print(
+                f"[ask_llm] requested model '{explicit}' does not support tools - "
+                "falling back to one that does"
+            )
+    else:
+        ordered = candidates
+
+    if not ordered:
+        raise RuntimeError(
+            "No model available. Specify one in the frontend, "
+            "add models to config/models.json, or install one in Ollama."
+        )
+
+    chosen = ordered[0]
+    if chosen is explicit:
+        print(f"[ask_llm] explicit model used: {model}")
+    elif chosen in _config_model_ids():
+        print(f"[ask_llm] model from config/models.json: {chosen}")
+    else:
+        print(f"[ask_llm] first installed Ollama model: {chosen}")
+    return chosen
 
 
 def _get_context_window(model: str) -> int | None:
@@ -14588,7 +14864,15 @@ def _get_context_window(model: str) -> int | None:
 
 def ask_llm(messages: List[dict], model: str | None = None, tools: List[Callable] | None = None) -> dict:
     """Send structured messages to the resolved model via Ollama and return the full message dict."""
-    resolved = _resolve_model(model)
+    resolved = _resolve_model(model, require_tools=bool(tools))
+
+    # A model Ollama reports as NOT supporting tools must not be asked to
+    # (Ollama rejects the request with 400) - drop the tool schemas and let
+    # the agent answer without tool use rather than crash the chat.
+    if tools and _supports_tools(resolved) is False:
+        print(f"[ask_llm] model '{resolved}' does not support tools - continuing without tool use")
+        tools = None
+
     num_ctx = _get_context_window(resolved)
 
     options = {"num_ctx": num_ctx} if num_ctx else {}
@@ -17889,7 +18173,7 @@ __all__ = [
 ## server/paths.py
 
 ```python
-"""
+r"""
 app/paths.py
 ============
 
@@ -17898,7 +18182,7 @@ writes. Paths are configured from the dashboard's consolidated settings
 page (config.html), stored in dashboard/config/app_settings.json via
 /api/settings:
 
-app_settings.json keys:
+    app_settings.json keys:
         dataDir        base data folder (default "data").
                        Relative -> project root; absolute -> used as-is.
         chatSavePath   where saved chat transcripts (.txt) are written.
@@ -17907,21 +18191,22 @@ app_settings.json keys:
                        Empty -> <dataDir>/rag_db
         rag            { commitOnSave: bool, autoIngest: bool }
 
-    Every key can ALSO come from an environment variable, which wins over the
-    settings file (so a second machine / a Chromebook can redirect storage
-    without touching any file):
+    Per-OS keys (one settings file works on Windows, Linux and macOS):
+        <key>Windows / <key>Linux / <key>Mac    e.g. dataDirLinux,
+                       chatSavePathWindows, ragDbPathMac. The key matching
+                       the CURRENT machine wins over the plain key below it;
+                       keys for OSes you do not use are simply left alone.
+                       A plain key that is a Windows drive path (D:\... /
+                       D:/...) is ignored on non-Windows hosts unless a
+                       per-OS key for that host is set - the app falls back
+                       to a project default instead of creating a literal
+                       folder.
 
+    Environment variables (highest precedence - handy on a Chromebook or a
+    second machine, no file edits needed):
         GENESSIS_DATA_DIR        -> dataDir
         GENESSIS_CHAT_SAVE_PATH  -> chatSavePath
         GENESSIS_RAG_DB_PATH     -> ragDbPath
-
-    `~` and $VAR are expanded (e.g. GENESSIS_DATA_DIR=~/genessis-data).
-
-CROSS-PLATFORM: the app runs on Windows, Linux and macOS. If a settings file
-copied from a Windows machine still holds absolute Windows paths (E:\\data\\...)
-and we are NOT on Windows, those are mapped to project-relative folders
-(`E:\\data\\rag_store` -> <project>/data/rag_store) with a one-time warning,
-so nothing silently writes into a garbage folder.
 
 Everything else is derived from these so changing "data folder" moves the
 chatlog, transcripts, history, exports and RAG store together.
@@ -17945,6 +18230,10 @@ APP_SETTINGS_FILE = BASE_DIR / "dashboard" / "config" / "app_settings.json"
 
 _EMPTY = (None, "", "")
 
+_IS_WINDOWS = os.name == "nt"
+# Absolute Windows path: drive letter (D:\... / D:/...) or UNC (\\server\...).
+_WIN_PATH_RE = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]{2})")
+
 # Settings key -> environment variable override.
 _ENV_KEYS = {
     "dataDir": "GENESSIS_DATA_DIR",
@@ -17952,11 +18241,8 @@ _ENV_KEYS = {
     "ragDbPath": "GENESSIS_RAG_DB_PATH",
 }
 
-# One-time warning guard per key (the message is printed on first use only).
-_warned: set[str] = set()
-
-_DRIVE_RE = re.compile(r"^[A-Za-z]:[/\\]")
-_UNC_RE = re.compile(r"^([/\\]{2})")
+# Current platform -> per-OS settings-key suffix.
+_OS_SUFFIX = {"win": "Windows", "linux": "Linux", "mac": "Mac"}
 
 
 def _get_text(value):
@@ -17970,54 +18256,57 @@ def _bool(value):
     return bool(value)
 
 
-def is_windows_path(text: str) -> bool:
-    """True when `text` is an absolute Windows-style path (X:\\... or \\\\UNC)."""
-    return bool(text and (_DRIVE_RE.match(text) or _UNC_RE.match(text)))
+def platform() -> str:
+    """'win' on Windows, 'linux' on Linux, 'mac' on macOS - used by the
+    dashboard to highlight the path fields for the current machine."""
+    if _IS_WINDOWS:
+        return "win"
+    if os.environ.get("GENESSIS_PLATFORM"):
+        normalized = os.environ["GENESSIS_PLATFORM"].strip().lower()
+        if normalized in _OS_SUFFIX:
+            return normalized
+    return "linux" if os.path.exists("/etc/os-release") else (
+        "mac" if os.path.exists("/System/Library/CoreServices") else "linux")
 
 
-def _portable_windows_path(text: str, source_label: str,
-                           os_name: str | None = None) -> str:
-    """Turn stored Windows absolute paths into project-relative paths when we
-    are not running on Windows. Returns the path unchanged on Windows.
+def os_text(value):
+    r"""Public: normalize a raw path string for the current OS.
 
-    `E:\\data\\rag_store` -> `data/rag_store`  (drive letter dropped,
-    separators normalized, one-time warning printed)."""
-    if os_name is None:
-        os_name = os.name
-    if os_name == "nt" or not text:
-        return text
-
-    norm = text.replace("\\", "/")
-    rel = None
-    drive = _DRIVE_RE.match(norm)
-    unc = _UNC_RE.match(norm)
-    if drive:
-        rel = norm[drive.end():].lstrip("/")
-    elif unc:
-        rel = norm[unc.end():].lstrip("/")
-
-    if rel is None:
-        return text
-
-    if not rel:
-        rel = ""
-    if source_label not in _warned:
-        _warned.add(source_label)
-        print(f"[paths] WARNING: '{text}' is a Windows absolute path - this is "
-              f"not {os_name}; using it as project-relative '{rel or '(defaults)'}' "
-              f"instead. Set {source_label} (or a GENESSIS_* env var) to override.")
-    return rel
+    Returns '' when a Windows-only path (E:\\... / E:/... / \\\\UNC) is being
+    resolved on a non-Windows host, so it can never be turned into a literal
+    folder on Linux/macOS. On Windows the value is returned verbatim.
+    """
+    text = _get_text(value)
+    if not _IS_WINDOWS and text and _WIN_PATH_RE.match(text):
+        return ""
+    return text
 
 
-def _configured(key: str) -> tuple[str, str]:
-    """(effective value, source label) for one path key.
-    Precedence: environment variable > app_settings.json."""
+def _env_override(key):
+    """Expanded env-var override for `key`, or None when not set."""
     env_name = _ENV_KEYS.get(key)
-    if env_name:
-        env_value = os.environ.get(env_name)
-        if env_value is not None and env_value.strip():
-            return env_value.strip(), env_name
-    return _get_text(_cfg.get(key)), key
+    if not env_name:
+        return None
+    value = os.environ.get(env_name)
+    if value is None or not value.strip():
+        return None
+    return os.path.expanduser(os.path.expandvars(value.strip()))
+
+
+def _os_value(cfg, key):
+    """Platform-aware value for one path setting.
+
+    Precedence: environment variable > the per-OS key for THIS machine
+    (<key>Windows / <key>Linux / <key>Mac) > the plain `key`. Windows drive
+    paths in the plain key are ignored on non-Windows hosts so the app falls
+    back to a project default instead of creating a literal folder.
+    """
+    env_value = _env_override(key)
+    if env_value is not None:
+        return _get_text(env_value)
+    suffix = _OS_SUFFIX.get(platform(), "")
+    os_key = f"{key}{suffix}" if suffix else key
+    return os_text(cfg.get(os_key) or cfg.get(key))
 
 
 def _load_app_settings() -> dict:
@@ -18033,10 +18322,9 @@ def resolve_path(raw, *fallback_parts) -> Path:
     `raw` is a folder path and is used verbatim when present (absolute paths
     are used as-is so the data/RAG store can live outside the project;
     relative paths resolve against the project root). When `raw` is empty,
-    fall back to BASE_DIR/<fallback_parts>. Windows absolute paths are mapped
-    to project-relative on non-Windows OSes (see `_portable_windows_path`).
+    fall back to BASE_DIR/<fallback_parts>.
     """
-    text = _configured_portable(raw)
+    text = os_text(raw)
     if not text:
         return BASE_DIR.joinpath(*fallback_parts).resolve()
     path = Path(os.path.expandvars(text)).expanduser()
@@ -18047,28 +18335,13 @@ def resolve_path(raw, *fallback_parts) -> Path:
 
 def _rooted(raw, default: Path) -> Path:
     """Like resolve_path, but the fallback is an already-resolved Path."""
-    text = _configured_portable(raw)
+    text = os_text(raw)
     if not text:
         return default
     path = Path(os.path.expandvars(text)).expanduser()
     if not path.is_absolute():
         path = BASE_DIR / path
     return path.resolve()
-
-
-def _configured_portable(raw) -> str:
-    """Resolve a raw settings value (possibly an env override) into the
-    OS-appropriate relative form. `raw` may be a path-setting key name (e.g.
-    "dataDir" - reads the env override / settings through `_configured`) or an
-    already-extracted path string (used by /api/settings)."""
-    if isinstance(raw, str) and raw in _ENV_KEYS:
-        text, source_label = _configured(raw)
-    elif isinstance(raw, str):
-        text, source_label = raw, "settings"
-    else:
-        text, source_label = _configured(raw)
-    text = os.path.expandvars(text)
-    return _portable_windows_path(text, source_label)
 
 
 # --------------------------------------------------------------------------
@@ -18080,19 +18353,19 @@ _cfg = _load_app_settings()
 # Snapshot of the stored *path* settings at import. The UI can compare
 # against the live file to tell the user a restart is required.
 _PATH_KEYS = ("dataDir", "chatSavePath", "ragDbPath")
-_path_keys_at_import = {key: _get_text(_cfg.get(key)) for key in _PATH_KEYS}
+_path_keys_at_import = {key: _os_value(_cfg, key) for key in _PATH_KEYS}
 
-# Base data folder (dataDir overrides the default "data").
-DATA_DIR = resolve_path("dataDir", "data")
+# Base data folder (dataDir / dataDirLinux / ... overrides the default "data").
+DATA_DIR = resolve_path(_os_value(_cfg, "dataDir"), "data")
 
 # Chat log folder + transcripts (chatSavePath overrides the sub-folder).
 CHATS_DIR = DATA_DIR / "chatlog"
-CHAT_SAVE_PATH = _configured_portable("chatSavePath")
-RECORDS_DIR = _rooted("chatSavePath", DATA_DIR / "chatlog" / "agent-text-records")
+CHAT_SAVE_PATH = _os_value(_cfg, "chatSavePath")
+RECORDS_DIR = _rooted(CHAT_SAVE_PATH, DATA_DIR / "chatlog" / "agent-text-records")
 CHAT_RECORDS_DIR = RECORDS_DIR  # alias used by the RAG search tool
 
 # RAG store (ragDbPath overrides <dataDir>/rag_db).
-RAG_DB_DIR = _rooted("ragDbPath", DATA_DIR / "rag_db")
+RAG_DB_DIR = _rooted(_os_value(_cfg, "ragDbPath"), DATA_DIR / "rag_db")
 
 # Chat log metadata + active session.
 LOG_FILE = CHATS_DIR / "chatRecord.jsonl"
@@ -18128,7 +18401,7 @@ def restart_needed() -> bool:
     server is still using the old resolved locations until a restart."""
     current = _load_app_settings()
     for key in _PATH_KEYS:
-        if _get_text(current.get(key)) != _path_keys_at_import.get(key):
+        if _os_value(current, key) != _path_keys_at_import.get(key):
             return True
     return False
 
@@ -18137,8 +18410,20 @@ def about() -> dict:
     """Human-readable summary of the resolved locations (for the config UI
     and the /api/rag/status endpoint)."""
     def _source(key):
-        return _configured(key)[1]
+        if _env_override(key):
+            return _ENV_KEYS[key]
+        suffix = _OS_SUFFIX.get(platform(), "")
+        os_key = f"{key}{suffix}" if suffix else key
+        value = _cfg.get(os_key)
+        if value not in _EMPTY:
+            return os_key
+        if _cfg.get(key) not in _EMPTY:
+            if not _IS_WINDOWS and _WIN_PATH_RE.match(_get_text(_cfg.get(key))):
+                return f"{key} (ignored Windows path on this OS)"
+            return key
+        return f"{key} (default)"
     return {
+        "platform": platform(),
         "data_dir": str(DATA_DIR),
         "chat_records_dir": str(RECORDS_DIR),
         "chat_log_file": str(LOG_FILE),
@@ -18153,7 +18438,6 @@ def about() -> dict:
         },
         "rag": rag_config(),
     }
-
 ```
 
 ## server/server.py
@@ -18729,6 +19013,7 @@ async def get_app_settings():
     return {
         "settings": payload,
         "restartNeeded": paths.restart_needed(),
+        "platform": paths.platform(),
     }
 
 
@@ -18736,27 +19021,20 @@ async def get_app_settings():
 async def save_app_settings(partial_settings: dict):
     """Merge a partial settings object into what is already stored.
 
-    Path settings that are Windows absolute paths (X:\\... or \\\\UNC) are
-    cleared back to "" so the settings file stays portable across Windows /
-    Linux / macOS - the running server keeps its already-resolved folders
-    until restart. The response reports which keys were normalized."""
+    Path values are stored verbatim - each OS picks its own per-OS key
+    (dataDirWindows / dataDirLinux / dataDirMac, ...) or falls back to the
+    plain key, and the running server keeps its already-resolved folders
+    until a restart (`restartNeeded`)."""
     stored = _load_json(APP_SETTINGS_FILE, {})
     stored.update(partial_settings)
 
-    normalized = []
-    for key in ("dataDir", "chatSavePath", "ragDbPath"):
-        value = stored.get(key)
-        if isinstance(value, str) and paths.is_windows_path(value):
-            stored[key] = ""
-            normalized.append(key)
-
     _save_json(APP_SETTINGS_FILE, stored)
-
-    if normalized:
-        print("[SETTINGS] normalized (cleared) Windows absolute paths: "
-              + ", ".join(normalized))
     print(f"[SETTINGS] updated keys: {', '.join(partial_settings.keys()) or '(none)'}")
-    return {"settings": stored, "normalized": normalized}
+    return {
+        "settings": stored,
+        "restartNeeded": paths.restart_needed(),
+        "platform": paths.platform(),
+    }
 
 
 # --- CHAT SAVE (write chat transcripts as .txt files) ---
@@ -18776,7 +19054,11 @@ def _resolve_chat_dir(raw_path: str) -> Path:
     - Absolute path -> kept only if it stays inside BASE_DIR; otherwise
       an absolute path is re-rooted under BASE_DIR (so a crafted value
       can never escape the project).
+
+    A Windows-style drive path (E:\\... ) has no meaning on Linux and is
+    treated as empty there (same rule as server/paths.py).
     """
+    raw_path = paths.os_text(raw_path)
     candidate = Path(raw_path or "")
 
     if not candidate.is_absolute():

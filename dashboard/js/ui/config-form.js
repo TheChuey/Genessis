@@ -14,7 +14,7 @@
  * @param {object} opts.settings   - stored app settings
  * @returns {{ root: HTMLElement, values: () => object }}
  */
-export function buildConfigForm({ agents = [], models = [], settings = {} }) {
+export function buildConfigForm({ agents = [], models = [], settings = {}, platform = "nix" }) {
     const root = document.createElement("div");
     root.className = "panel";
 
@@ -65,6 +65,59 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
         settings.ragDbPath || ""
     ));
 
+    // ---- Per-OS paths (three choices: Windows / Linux / macOS) ----
+    // One settings file can carry a separate folder layout for Windows,
+    // Linux and macOS. The row for the machine you're on now is highlighted;
+    // OSes you don't use are left alone (blank = their project defaults).
+    const osHeading = document.createElement("h3");
+    osHeading.className = "config-section-heading";
+    osHeading.textContent = "Per-OS paths (Windows / Linux / macOS)";
+    root.appendChild(osHeading);
+
+    const osNote = document.createElement("p");
+    osNote.className = "config-note";
+    osNote.textContent =
+        "Each OS picks its own folders: the row for this machine wins, the " +
+        "plain fields above are the fallback, and a GENESSIS_DATA_DIR / " +
+        "GENESSIS_CHAT_SAVE_PATH / GENESSIS_RAG_DB_PATH environment variable " +
+        "overrides everything. Leave OSes you don't use alone. Changes apply " +
+        "after a server restart.";
+    root.appendChild(osNote);
+
+    const osRows = [
+        { suffix: "Windows", label: "Windows", current: platform === "win" },
+        { suffix: "Linux", label: "Linux", current: platform === "linux" },
+        { suffix: "Mac", label: "macOS", current: platform === "mac" },
+    ];
+    const pathGroups = [
+        { key: "dataDir", label: "Data folder", hint: "chat records, history, exports, transcripts + RAG by default" },
+        { key: "chatSavePath", label: "Chat save path", hint: "saved chat transcripts (.txt)" },
+        { key: "ragDbPath", label: "RAG database path", hint: "RAG memory store (chroma.sqlite3)" },
+    ];
+    for (const group of pathGroups) {
+        const wrap = document.createElement("div");
+        wrap.className = "os-path-group";
+        const title = document.createElement("div");
+        title.className = "os-path-group-title";
+        title.textContent = group.label + " \u2014 " + group.hint;
+        wrap.appendChild(title);
+        for (const os of osRows) {
+            const field = document.createElement("label");
+            field.className = "field" + (os.current ? " os-path-current" : "");
+            const span = document.createElement("span");
+            span.textContent = group.label + " (" + os.label + ")" + (os.current ? " \u2014 this machine" : "");
+            const input = document.createElement("input");
+            input.type = "text";
+            input.id = group.key + os.suffix + "-input";
+            input.placeholder = "absolute or project-relative folder (blank = default)";
+            input.value = settings[group.key + os.suffix] || "";
+            field.appendChild(span);
+            field.appendChild(input);
+            wrap.appendChild(field);
+        }
+        root.appendChild(wrap);
+    }
+
     // ---- Chat versioning toggle ----
     const versionField = document.createElement("label");
     versionField.className = "field field-toggle";
@@ -112,7 +165,7 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
     return {
         root,
         values() {
-            return {
+            const values = {
                 defaultAgentId: byId("default-agent-select").value,
                 defaultModel: byId("default-model-select").value,
                 chatSavePath: byId("chat-save-path").value.trim(),
@@ -124,6 +177,12 @@ export function buildConfigForm({ agents = [], models = [], settings = {} }) {
                     autoIngest: byId("rag-auto-ingest").checked,
                 },
             };
+            for (const suffix of ["Windows", "Linux", "Mac"]) {
+                values["dataDir" + suffix] = byId("dataDir" + suffix + "-input").value.trim();
+                values["chatSavePath" + suffix] = byId("chatSavePath" + suffix + "-input").value.trim();
+                values["ragDbPath" + suffix] = byId("ragDbPath" + suffix + "-input").value.trim();
+            }
+            return values;
         },
     };
 }
