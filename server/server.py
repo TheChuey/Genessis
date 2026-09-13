@@ -1,5 +1,6 @@
 import sys
 import os
+import subprocess
 
 # Make `python server.py` work from anywhere (server/, root, ...):
 #   1. put the project root on sys.path so `engine.*` imports resolve;
@@ -36,6 +37,15 @@ from engine.agents.registry import list_agents
 from engine.agents.factory import build_agent, replay_history, AgentNotFoundError
 from server.chat_store import store as chat_store
 from server import paths
+
+# Modular interface layer (docs/01_IDEA_AND_ARCHITECTURE.md): update modules
+# under interface/updates/<domain>/ are discovered and executed natively.
+from interface.update_manager import (UpdateManager, get_update_manager,
+                                      UPDATES_DIR, ARCHIVE_DIR)
+from interface.interface_dispatcher import (InterfaceDispatcher,
+                                            get_dispatcher, TRACE_LOG_FILE)
+from interface.restore_manager import (RestoreManager, get_restore_manager,
+                                       DEFAULT_BASELINE, MANIFEST_NAME)
 
 # Runs once at startup; scans data/chatlog/agent-text-records/*.txt and records
 # their header info in data/chatlog/chatRecord.jsonl so past chats appear in
@@ -97,6 +107,32 @@ def _default_agent() -> str:
 async def lifespan(app: FastAPI):
     refresh_models()           # ollama -> config/models.json
     chat_store.import_once()   # agent-text-records/*.txt -> data/chatlog/chatRecord.jsonl
+
+    # Resolved storage locations at boot (cross-platform - data/chat/rag can
+    # live anywhere via app_settings.json or GENESSIS_* env overrides).
+    _boot_paths = paths.about()
+    print("[paths] data      -> " + _boot_paths["data_dir"])
+    print("[paths] records   -> " + _boot_paths["chat_records_dir"])
+    print("[paths] rag db    -> " + _boot_paths["rag_db_dir"])
+    for key, source in _boot_paths.get("sources", {}).items():
+        if source != key:
+            print(f"[paths] {key} overridden by {source}")
+
+    # Modular interface: discover update modules + traced dispatcher once at
+    # startup (exposed on app.state so request handlers can reach them).
+    try:
+        interface_manager = UpdateManager()
+        interface_manager.discover_all_active_modules()
+        print("[interface] active update modules: "
+              + ", ".join(f"{d}/{', '.join(n) if n else ''}"
+                          for d, n in sorted(interface_manager.active_modules_catalog.items())))
+        app.state.update_manager = interface_manager
+        app.state.interface_dispatcher = InterfaceDispatcher(interface_manager)
+    except Exception as exc:   # a broken update module must never block boot
+        print(f"[interface] WARNING: update discovery failed: {exc}")
+        app.state.update_manager = None
+        app.state.interface_dispatcher = None
+
     yield                      # serve requests; code after this runs on shutdown
 
 app = FastAPI(lifespan=lifespan)
@@ -537,13 +573,29 @@ async def get_app_settings():
 
 @app.post("/api/settings")
 async def save_app_settings(partial_settings: dict):
-    """Merge a partial settings object into what is already stored."""
+    """Merge a partial settings object into what is already stored.
+
+    Path settings that are Windows absolute paths (X:\\... or \\\\UNC) are
+    cleared back to "" so the settings file stays portable across Windows /
+    Linux / macOS - the running server keeps its already-resolved folders
+    until restart. The response reports which keys were normalized."""
     stored = _load_json(APP_SETTINGS_FILE, {})
     stored.update(partial_settings)
+
+    normalized = []
+    for key in ("dataDir", "chatSavePath", "ragDbPath"):
+        value = stored.get(key)
+        if isinstance(value, str) and paths.is_windows_path(value):
+            stored[key] = ""
+            normalized.append(key)
+
     _save_json(APP_SETTINGS_FILE, stored)
 
+    if normalized:
+        print("[SETTINGS] normalized (cleared) Windows absolute paths: "
+              + ", ".join(normalized))
     print(f"[SETTINGS] updated keys: {', '.join(partial_settings.keys()) or '(none)'}")
-    return {"settings": stored}
+    return {"settings": stored, "normalized": normalized}
 
 
 # --- CHAT SAVE (write chat transcripts as .txt files) ---
@@ -654,6 +706,227 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/")
 async def home():
     return FileResponse(STATIC_DIR / "index.html")
+
+# --- MODULAR INTERFACE / UPDATE SYSTEM (docs/01_IDEA_AND_ARCHITECTURE.md) ---
+
+# Master switch for /api/interface/run (executes update-module functions with
+# arbitrary arguments - the user opted in for this local app). Starts OFF so a
+# fresh boot is never armed; /api/interface/toggle-run flips it for the
+# current process.
+INTERFACE_RUN_ENABLED = False
+
+
+def _update_manager():
+    """The lifespan-created manager, or the process-world singleton when the
+    startup discovery failed (so the endpoints never crash)."""
+    manager = getattr(app.state, "update_manager", None)
+    return manager if manager is not None else get_update_manager()
+
+
+def _dispatcher():
+    dispatcher = getattr(app.state, "interface_dispatcher", None)
+    return dispatcher if dispatcher is not None else get_dispatcher()
+
+
+def _restore_manager():
+    manager = getattr(app.state, "restore_manager", None)
+    return manager if manager is not None else get_restore_manager()
+
+
+def _json_safe(value):
+    """Best-effort JSON serialization for /api/interface/run results."""
+    if isinstance(value, (dict, list, str, int, float, bool)) or value is None:
+        return value
+    try:
+        return json.loads(json.dumps(value, default=str))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+class InterfaceRunRequest(BaseModel):
+    domain: str
+    module: str
+    function: str
+    args: list = []
+    kwargs: dict = {}
+
+
+class InterfaceToggleRequest(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/interface/status")
+def interface_status():
+    """Everything the Settings 'Updates / Interface' card needs: the active
+    module catalog, the external archive, the trace-log tail and the
+    baseline (current-known-good-copy/) freshness + live drift."""
+    try:
+        manager = _update_manager()
+        catalog = {
+            domain: sorted(names)
+            for domain, names in sorted(manager.active_modules_catalog.items())
+        }
+    except Exception:
+        catalog = {}
+
+    archived: dict[str, list[str]] = {}
+    if ARCHIVE_DIR.is_dir():
+        for domain_dir in sorted(ARCHIVE_DIR.iterdir()):
+            if domain_dir.is_dir():
+                archived[domain_dir.name] = sorted(
+                    p.name for p in domain_dir.glob("*.py")
+                )
+
+    trace_tail: list[str] = []
+    if TRACE_LOG_FILE.is_file():
+        trace_tail = TRACE_LOG_FILE.read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines()[-20:]
+
+    baseline = {
+        "folder": str(DEFAULT_BASELINE),
+        "exists": DEFAULT_BASELINE.is_dir(),
+        "manifest": None,
+        "drift": None,
+        "error": None,
+    }
+    try:
+        diff = _restore_manager().diff()
+        baseline.update({
+            "folder": diff["baseline"],
+            "exists": Path(diff["baseline"]).is_dir(),
+            "drift": {
+                "modified": len(diff["modified"]),
+                "modified_files": diff["modified"][:50],
+                "shared": diff["shared"],
+                "skipped": len(diff["skipped"]),
+                "untracked": len(diff["untracked"]),
+            },
+        })
+    except Exception as exc:
+        baseline["error"] = str(exc)
+
+    manifest_path = Path(baseline["folder"]) / MANIFEST_NAME
+    if manifest_path.is_file():
+        baseline["manifest"] = _load_json(manifest_path, None)
+
+    return {
+        "ok": True,
+        "run_enabled": INTERFACE_RUN_ENABLED,
+        "updates_dir": str(UPDATES_DIR),
+        "archive_dir": str(ARCHIVE_DIR),
+        "trace_log": str(TRACE_LOG_FILE),
+        "catalog": catalog,
+        "archived": archived,
+        "trace_tail": trace_tail,
+        "baseline": baseline,
+    }
+
+
+@app.post("/api/interface/apply")
+def interface_apply():
+    """Reload every update module from disk, then regenerate the docs
+    snapshots (docs/APP_STRUCTURE.md + docs/APP_CODE_SNAPSHOT.md)."""
+    try:
+        manager = _update_manager()
+        catalog = manager.reload_all()
+        print("[interface] apply: reloaded modules per domain:"
+              + ", ".join(f"{d}={len([n for n in ns])}"
+                          for d, ns in sorted(catalog.items())))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"module reload failed: {exc}")
+
+    docs_script = BASE_DIR / "scripts" / "update_docs.py"
+    docs_ok = True
+    if docs_script.is_file():
+        result = subprocess.run(
+            [sys.executable, str(docs_script)], cwd=str(BASE_DIR)
+        )
+        docs_ok = result.returncode == 0
+    else:
+        docs_ok = False
+
+    return {
+        "ok": True,
+        "catalog": {
+            d: sorted(names)
+            for d, names in sorted(_update_manager().active_modules_catalog.items())
+        },
+        "docs_regenerated": docs_ok,
+    }
+
+
+@app.post("/api/interface/snapshot")
+def interface_snapshot():
+    """Publish the current live tree as the new baseline (rebaseline)."""
+    try:
+        count = _restore_manager().snapshot_baseline()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"snapshot failed: {exc}")
+    return {"ok": True, "files": count, "baseline": str(DEFAULT_BASELINE)}
+
+
+@app.post("/api/interface/restore")
+def interface_restore(payload: dict = None):
+    """Roll the live tree back to the baseline. DRY-RUN by default - the
+    browser must send {"apply": true} (or {"dryRun": false}) to actually
+    restore. A real restore backs everything up first into
+    data/snapshots/pre_restore_backup/."""
+    payload = payload or {}
+    baseline = payload.get("baseline")
+    requested = payload.get("apply", False)
+    dry_run = requested is not True
+    if payload.get("dryRun") is False:
+        dry_run = False
+    if dry_run:
+        result = _restore_manager().restore(baseline=baseline, dry_run=True)
+        return {"ok": True, "dry_run": True, **result}
+    try:
+        result = _restore_manager().restore(baseline=baseline, dry_run=False)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"restore failed: {exc}")
+    return {"ok": True, "dry_run": False, **result}
+
+
+@app.post("/api/interface/run")
+def interface_run(data: InterfaceRunRequest):
+    """Execute an update-module function by (domain, module, function) names.
+    Arbitrary code execution - gated by INTERFACE_RUN_ENABLED, which the
+    Settings card arms explicitly via /api/interface/toggle-run."""
+    if not INTERFACE_RUN_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="Module execution is disabled. Enable it in Settings -> "
+                   "Updates / Interface first.",
+        )
+    try:
+        result = _dispatcher().execute_action(
+            data.domain, data.module, data.function,
+            *data.args, **data.kwargs,
+        )
+    except ModuleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
+    return {"ok": True, "domain": data.domain, "module": data.module,
+            "function": data.function, "result": _json_safe(result)}
+
+
+@app.post("/api/interface/toggle-run")
+def interface_toggle_run(data: InterfaceToggleRequest):
+    """Arm/disarm /api/interface/run for this process. The flip is logged to
+    data/interface_trace.log so a change of state is never silent."""
+    global INTERFACE_RUN_ENABLED
+    INTERFACE_RUN_ENABLED = data.enabled
+    entry = f"[RUN TOGGLE] module execution {'ENABLED' if data.enabled else 'DISABLED'}"
+    print(entry)
+    try:
+        from interface.interface_dispatcher import logger as _trace_logger
+        _trace_logger.info(entry)
+    except Exception:
+        pass
+    return {"ok": True, "run_enabled": INTERFACE_RUN_ENABLED}
+
 
 if __name__ == "__main__":
     import uvicorn

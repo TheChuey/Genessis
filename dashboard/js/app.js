@@ -24,6 +24,7 @@ import { renderHeaderNav } from "./ui/header-nav.js";
 import { ChatSession } from "./classes/ChatSession.js";
 import { ChatFactory } from "./classes/chat-window.js";
 import { renderMarkdown } from "./ui/markdown.js";
+import { renderInterfaceIndicator } from "./ui/interface-indicator.js";
 import * as api from "./api/api.js";
 
 // ---- app-level state ----
@@ -65,6 +66,13 @@ async function boot() {
         /* keep the hardcoded defaults */
     }
 
+    // 0c. Interface pill: "N update modules" in the header (hidden on servers
+    //     without /api/interface/* or when nothing is loaded).
+    renderInterfaceIndicator({
+        container: document.querySelector(".app-header-row"),
+        onMesh: true,
+    });
+
     // 1. Render agent cards (returns the full agent list).
     agents = await renderAgents({
         containerId: "agent-cards",
@@ -93,6 +101,9 @@ function setPageTitle(title, subtitle) {
     if (taglineEl && subtitle && subtitle.trim()) {
         taglineEl.textContent = subtitle.trim();
     }
+    // Browser-tab title: "Genessis - <subtitle>" (falls back to the raw title).
+    const cleanSub = (subtitle && subtitle.trim()) ? " \u2014 " + subtitle.trim() : "";
+    document.title = ((title && title.trim()) ? title.trim() : "") + cleanSub;
 }
 
 /** Create the single persistent flyout widget + wire its agent switcher. */

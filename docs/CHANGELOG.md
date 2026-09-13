@@ -3,6 +3,229 @@
 All notable changes to this project. Format based on Keep a Changelog
 (https://keepachangelog.com/), grouped by date.
 
+## 2026-09-12 — Cross-platform paths + save feedback + Linux/Chromebook support
+
+The app now works identically on Windows, Linux, macOS and the ChromeOS Linux
+container, and where data is saved can be changed without editing a file.
+
+### Added — portable path resolution (`server/paths.py`)
+
+- **Env-var overrides** (highest precedence): `GENESSIS_DATA_DIR`,
+  `GENESSIS_CHAT_SAVE_PATH`, `GENESSIS_RAG_DB_PATH` override the stored
+  settings; `~` and `$VAR` are expanded, so `~/genessis-data` works. Precedence
+  chain: env var -> `app_settings.json` -> project-relative `data/`.
+- **Cross-platform Windows-path guard**: stored absolute Windows paths
+  (`E:\data\...`, `\\server\share`) are detected and, on any non-Windows OS,
+  mapped to project-relative folders with a one-time warning (`E:\data\rag_store`
+  -> `<project>/data/rag_store`). Pure helper with injectable OS hint so it is
+  unit-testable for Linux/macOS semantics.
+- `server/paths.py` docstring + `about()` gained a `sources` map telling which
+  setting source resolved each key.
+
+### Changed — save flow + startup visibility
+
+- `server/server.py` `/api/settings` — on save, any `dataDir`/`chatSavePath`/
+  `ragDbPath` that is a Windows absolute path is cleared to `""` and reported
+  in the response as `{normalized: [...]}`, so a settings file copied between
+  machines never carries machine-specific `E:\...` paths.
+- `server/server.py` `lifespan()` — prints the resolved data / chat records /
+  RAG folders at boot and flags which keys are env-overridden.
+- `dashboard/js/config-page.js` — save now shows a prominent green **"Settings
+  saved"** response window that also lists any path fields that were cleared
+  because they held Windows paths (plus the restart hint). `dashboard/config.html`
+  gained the `.save-response` styles.
+- `dashboard/config/app_settings.json` — `dataDir`, `chatSavePath`,
+  `ragDbPath` cleared to `""` (defaults / env vars now control storage).
+
+### Changed — docs
+
+- `README.md` — new "Running on Linux / macOS / ChromeOS (Chromebook)"
+  quickstart and "Changing where data is saved" (Settings vs env vars vs
+  defaults) sections; folder tree updated (`js/ui/` + removed `test/`); the
+  deleted `docs/documentation_CREATING_AGENTS.md` link replaced; "Recent
+  changes" points at the current entry.
+- `docs/RESTRUCTURE_README.md` — `test/` and the deleted agent-authoring doc
+  removed from the tree; portable-`paths.py` note added under "Launching".
+
+### Verified
+
+- Path unit tests (forged posix semantics): drive/UNC detection; mapping
+  `E:\data\rag_store` -> `data/rag_store` and UNC -> relative; unchanged on
+  Windows and for POSIX absolute paths; env override wins over stored settings;
+  `$HOME`/`~` expansion; `about()["sources"]` populated.
+- `/api/settings` returns `{settings, normalized}` and clears Windows paths.
+- uvicorn boot with `GENESSIS_DATA_DIR` set to a temp folder: boot log shows
+  data/records/rag all under the override and `dataDir overridden by
+  GENESSIS_DATA_DIR`; `/api/rag/status` 200.
+
+## 2026-09-12 — Frontend wiring for the interface system + title propagation
+
+The Modular Interface / update system is now reachable from the browser.
+New `server/server.py` endpoints power a Settings card, a header pill shows
+module activity, and the about.json title/tagline is propagated to the
+browser tab on every page.
+
+### Added — `/api/interface/*` endpoints (`server/server.py`)
+
+- `GET /api/interface/status` — live module catalog (per domain), external
+  archive contents, trace-log tail (`data/interface_trace.log`, last 20
+  lines), and baseline info: folder, `BASELINE_MANIFEST.json` metadata and a
+  live **drift count** (SHA-256 diff vs `current-known-good-copy/`).
+- `POST /api/interface/apply` — `reload_all()` the update modules, then
+  regenerate `docs/APP_STRUCTURE.md` + `docs/APP_CODE_SNAPSHOT.md`.
+- `POST /api/interface/snapshot` — publish the current tree as the new
+  baseline (rebaseline via `RestoreManager.snapshot_baseline()`).
+- `POST /api/interface/restore` — `{baseline?, apply?, dryRun?}`; **dry-run by
+  default**. A real restore backs up overwritten files to
+  `data/snapshots/pre_restore_backup/` before rolling back, then regenerates
+  the docs.
+- `POST /api/interface/run` — `{domain, module, function, args?, kwargs?}`
+  through `InterfaceDispatcher.execute_action()`. Arbitrary code execution;
+  **disabled by default** and gated server-side by `INTERFACE_RUN_ENABLED`.
+  Flipped with:
+- `POST /api/interface/toggle-run` — `{enabled}` arms/disarms `/run` for the
+  current process (logged to `data/interface_trace.log`).
+- `RestoreManager.diff(baseline)` — silent SHA-256 comparison returning
+  `{baseline, shared, modified, skipped, untracked}`; `restore()` and the
+  status endpoint share it (no more double file-map builds).
+- `about/set_title.py apply --snapshot` now snapshots AFTER the docs
+  regeneration (was reversed, so the baseline captured stale docs and
+  `restore --dry-run` reported the two doc files as modified).
+
+### Added — frontend (`dashboard/`)
+
+- `js/api/api.js` — `getInterfaceStatus`, `applyInterface`,
+  `snapshotInterface`, `restoreInterface`, `runInterface`, `setRunEnabled`.
+- `js/ui/interface-manager.js` — the "Updates / Interface" card on the
+  Settings page (below Models): module catalog, archive, baseline freshness +
+  drift, trace-log tail, Apply / Snapshot / Restore (dry-run) / Restore
+  (real) buttons, and an **opt-in "Enable module execution" gated** run-module
+  panel (function name + JSON args/kwargs) mirroring `run_enabled` from the
+  server.
+- `js/ui/interface-indicator.js` — quiet "N updates" header pill (green dot,
+  amber when the baseline drifts, "\u2022 on" when run is armed); hidden on
+  servers without `/api/interface/*`; links to `config.html#interface-section`.
+  Rendered on `index.html` and `config.html`.
+- `config.html` — `#interface-section` mount + local card styles.
+- Title propagation: `app.js#setPageTitle()` now sets `document.title`
+  (`<title> – <subtitle>`); `config-page.js` boot fetches `/api/about` for the
+  tab title; `chat.html` fetches `/api/about` and shows a small site chip
+  (`#sc-site-title`) in its header plus the tab title.
+
+### Verified
+
+- `py_compile` clean on `server/server.py` and `interface/restore_manager.py`.
+- TestClient: `/api/interface/status` 200 (catalog, drift); `/run` denied with
+  403 while disabled; `toggle-run` on -> `secondary_engine_action(5)` == `50`
+  (traced); bad function -> 500; `apply` reloaded `engine=2` + regenerated
+  docs; `restore` dry-run reported the expected modified files. All six pages
+  endpoints serve 200.
+
+## 2026-09-12 — 02 implementation plan folded in; server startup wiring
+
+Follow-up to the Modular Interface build, based on `docs/02_IMPLEMENTATION_PLAN.md`
+(dropped into `docs/`). The plan's missing pieces were folded into the existing
+implementation instead of a verbatim overwrite, preserving the earlier choices
+(`current-known-good-copy/` baseline, `--dry-run`, `snapshot` command, safer
+exclusions). The plan's Linux path (`venv/bin/python`) is `venv\Scripts\python.exe`
+on this Windows project.
+
+### Added
+
+- `interface/updates/engine/newfunction.py` — sample engine update module
+  (`execute_new_logic()` / `secondary_engine_action()`), the 02-plan Step 6
+  example. `hello_update.py` is kept alongside.
+- `update_manager.discover_all_active_modules()` — alias for `reload_all()`
+  (clear catalog, drop cached modules, re-import from disk).
+- `update_manager.list_domain_modules(domain)` — sorted module names per domain.
+- `interface_dispatcher.execute_action(domain, module, function, *args)` —
+  resolve a module by name through the update manager and run it traced;
+  raises `ModuleNotFoundError` for unknown modules.
+- Trace logging now also goes through the `app_change_tracker` logger with a
+  `FileHandler` on `data/interface_trace.log` (02-plan Step 3); stdout print
+  kept.
+
+### Changed — server startup (02-plan Step 7)
+
+- `server/server.py` — `lifespan()` now builds `UpdateManager`, runs
+  `discover_all_active_modules()`, builds `InterfaceDispatcher`, and exposes
+  both on `app.state` (`app.state.update_manager`,
+  `app.state.interface_dispatcher`). Discovery failures print a warning and
+  leave the state `None` so a broken update module never blocks server boot.
+
+## 2026-09-12 — Modular Interface & System Update Architecture
+
+Introduced a pluggable update/restore layer so new features never touch core
+modules again. Design reference: `docs/01_IDEA_AND_ARCHITECTURE.md`.
+
+### Added — `interface/` package
+
+- `interface/update_manager.py` (`UpdateManager`) — dynamically discovers and
+  imports every `.py` under `interface/updates/<domain>/` (`engine/`,
+  `tools/`, `server/`), keeps live module objects in `active_modules_catalog`,
+  and exposes `get_active_module(domain, module)` for direct native execution.
+  `move_module_to_external_archive(domain, module)` relocates retired update
+  modules to `data/interface_archive/<domain>/`.
+- `interface/interface_dispatcher.py` (`InterfaceDispatcher`) —
+  `trace_and_execute(fn, *args)` logs the caller file + line number
+  (via `inspect`) before running a module function, to
+  `data/interface_trace.log`.
+- `interface/restore_manager.py` (`RestoreManager`) — SHA-256 baseline
+  comparison (`current-known-good-copy/` by default, `test/` fallback),
+  `snapshot_baseline()` to publish a complete working copy of the last good
+  source, and `restore()` which backs up every overwritten file to
+  `data/snapshots/pre_restore_backup/<timestamp>/` before rolling back and
+  then regenerates the docs snapshots. Restore semantics: only files present
+  in BOTH trees whose checksum differs are overwritten; baseline-only and
+  live-only files are reported but left untouched. User data is excluded
+  (`data/`, `venv/`, `.git/`, `__pycache__/`, `current-known-good-copy/`,
+  `test/`, `dashboard/config/app_settings.json`, `about/about.json`,
+  `*.bak`, `*.pyc`).
+- `interface/updates/` — seeded with `engine/`, `tools/`, `server/` domains
+  and one example module (`engine/hello_update.py`: `run_example()` /
+  `double()`).
+
+### Added — documentation snapshots
+
+- `scripts/update_docs.py` — regenerates `docs/APP_STRUCTURE.md` (folder-tree
+  snapshot) and `docs/APP_CODE_SNAPSHOT.md` (per-file source snapshot; never
+  embeds itself). Runs automatically on `apply` and after `restore`.
+
+### Changed — CLI
+
+- `about/set_title.py` now dispatches `apply`, `snapshot` and `restore`:
+  - `python about/set_title.py apply [--snapshot]` — reload all active update
+    modules (+ publish the baseline when `--snapshot` is passed), then
+    regenerate the docs snapshots.
+  - `python about/set_title.py snapshot [folder]` — publish the current tree
+    into `current-known-good-copy/` (the default restore baseline).
+  - `python about/set_title.py restore [baseline] [--dry-run]` — compare the
+    live tree against the baseline, back up + restore modified files, and
+    regenerate the docs snapshots.
+  - no args still edits about.json interactively / positionally.
+
+### Verified
+
+- `python -m py_compile` passes on every new/changed module.
+- `apply` discovered + imported `engine/hello_update` and generated both docs
+  snapshots.
+- Option B access returned live module: `run_example()` and `double(21) == 42`.
+- `trace_and_execute()` logged the caller (`file:line -> module.function`) to
+  `data/interface_trace.log`.
+- `move_module_to_external_archive()` moved the example to
+  `data/interface_archive/engine/` and refreshed the catalog.
+- A real restore: tampered `docs/APP_STRUCTURE.md` was detected (1 modified),
+  backed up to `data/snapshots/pre_restore_backup/<timestamp>/`, rolled back
+  from the baseline, and both docs snapshots were regenerated. A fresh
+  baseline yields `modified: 0` on `restore --dry-run`.
+- Exclusions confirmed: no `.git/`, `data/`, or `venv/` content leaks into the
+  generated snapshots.
+
+### Changed — other
+
+- `current-known-good-copy/` added to `.gitignore` (generated baseline copy;
+  `data/` was already ignored).
+
 ## 2026-09-12 — Agent Monitor removed; launch fixed; docs updated
 
 The Agent Monitoring feature (live activity feed) was removed and the affected

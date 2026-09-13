@@ -47,10 +47,16 @@ terminator1/
 │       ├── classes/ (ChatSession.js, chat-window.js)
 │       ├── logic/  (models.js, chat-formatter.js)
 │       └── ui/     (markdown.js, agents.js, appearance.js, config-form.js,
-│                    agent-editor.js)
+│                    agent-editor.js, header-nav.js,
+│                    interface-indicator.js,   # header "N updates" pill
+│                    interface-manager.js)     # Settings "Updates/Interface" card
 │
 ├── server/                  # Thin glue: FastAPI app + chat log + path config
-│   ├── server.py            # HTTP endpoints, static mount, lifespan
+│   ├── server.py            # HTTP endpoints, static mount, lifespan; also
+│   │                        # discovers interface/updates at startup and
+│   │                        # exposes update_manager + dispatcher on app.state;
+│   │                        # /api/interface/{status,apply,snapshot,restore,
+│   │                        # run,toggle-run} wire the UI to the update system
 │   ├── paths.py             # Config-driven runtime path authority
 │   └── chat_store/
 │       ├── logger.py
@@ -62,15 +68,23 @@ terminator1/
 │                            # in app_settings.json#defaultAgentId)
 ├── scripts/
 │   ├── rebuild_rag.py
-│   └── version_chats.py
+│   ├── version_chats.py
+│   └── update_docs.py        # NEW: regenerates APP_STRUCTURE.md + APP_CODE_SNAPSHOT.md
+├── interface/                # NEW: modular update & restore layer
+│   ├── update_manager.py     #    discover/import interface/updates/<domain>/*
+│   ├── interface_dispatcher.py  # trace_and_execute() caller line tracing
+│   ├── restore_manager.py    #    baseline compare/restore + snapshot_baseline()
+│   └── updates/              #    engine/ | tools/ | server/
 ├── about/
 │   ├── about.json           # title/subtitle served by GET /api/about
-│   └── set_title.py
+│   └── set_title.py         # + 'apply' / 'snapshot' / 'restore' CLI triggers
 ├── docs/
 │   ├── CHANGELOG.md
 │   ├── RESTRUCTURE_README.md
-│   └── documentation_CREATING_AGENTS.md
-├── test/                    # Pre-infection original snapshot (recovery reference)
+│   ├── 01_IDEA_AND_ARCHITECTURE.md   # NEW: design doc for the update/restore layer
+│   ├── APP_STRUCTURE.md              # AUTO-GENERATED
+│   └── APP_CODE_SNAPSHOT.md          # AUTO-GENERATED
+├── current-known-good-copy/ # GENERATED restore baseline (python about/set_title.py snapshot)
 ├── requirements.txt
 └── README.md                 # Original project README (kept up to date)
 ```
@@ -84,6 +98,15 @@ top of the file adds the project root and drops the script's own folder so the
 ```
 venv\Scripts\python -m uvicorn server.server:app
 ```
+
+The app is cross-platform (Windows / Linux / macOS / ChromeOS Linux). All
+runtime storage is resolved by `server/paths.py` from `dataDir` /
+`chatSavePath` / `ragDbPath` (defaults = project-relative `data/`), with
+`GENESSIS_DATA_DIR` / `GENESSIS_CHAT_SAVE_PATH` / `GENESSIS_RAG_DB_PATH` env
+overrides taking precedence. Windows absolute paths (`E:\...`) saved in
+`app_settings.json` are auto-mapped to project-relative folders on non-Windows
+OSes, and cleared on save from the Settings page. See the README's "Changing
+where data is saved".
 
 > The Agent Monitor feature (`dashboard/monitor.html`, `dashboard/js/monitor.js`,
 > `server/activity.py` and the `/api/activity*` endpoints) was removed in

@@ -216,6 +216,25 @@ body {
     font-weight: 700;
 }
 
+.sc-site-title {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    max-width: 220px;
+    margin-right: 6px;
+    padding: 4px 10px;
+    border: 1px solid rgba(255,255,255,.25);
+    border-radius: 999px;
+    background: rgba(255,255,255,.10);
+    color: rgba(255,255,255,.92);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sc-site-title.show { display: inline-flex; }
+
 .sc-header-info {
     display: flex;
     flex-direction: column;
@@ -1202,6 +1221,8 @@ body {
         <div class="sc-agent-name" id="sc-agent-name">Assistant</div>
         <div class="sc-agent-sub" id="sc-agent-sub">AI agent</div>
     </div>
+
+    <span class="sc-site-title" id="sc-site-title" title=""></span>
 
     <div class="sc-header-actions">
 
@@ -3869,6 +3890,40 @@ async function boot() {
 
     } catch (_) {
         /* Defaults remain active. */
+    }
+
+    /* Site identity from about/about.json: browser-tab title + the small
+       site chip in the header. Fail-soft; the static <title> stays put. */
+    try {
+
+        const aboutResponse =
+            await fetch(
+                "/api/about"
+            );
+
+        if (aboutResponse.ok) {
+
+            const about =
+                await aboutResponse.json();
+
+            const title =
+                String(about.title || "Terminator1").trim();
+            const subtitle =
+                String(about.subtitle || "").trim();
+
+            document.title =
+                title + (subtitle ? " \u2014 " + subtitle : "");
+
+            const chip = document.getElementById("sc-site-title");
+            if (chip) {
+                chip.textContent = title + (subtitle ? " \u00b7 " + subtitle : "");
+                chip.title = title;
+                chip.classList.add("show");
+            }
+        }
+
+    } catch (_) {
+        /* Static <title> remains active. */
     }
 
     if (

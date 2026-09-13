@@ -62,6 +62,50 @@ export async function getAbout() {
     return request("/api/about");
 }
 
+// ---------------------------------------------------------------- interface
+
+/** Full status blob for the Settings "Updates / Interface" card:
+ * { catalog, archived, trace_tail, baseline, run_enabled, updates_dir, ... }. */
+export async function getInterfaceStatus() {
+    return request("/api/interface/status");
+}
+
+/** Reload update modules from disk + regenerate the docs snapshots. */
+export async function applyInterface() {
+    return request("/api/interface/apply", { method: "POST" });
+}
+
+/** Publish the current live tree as the new baseline (rebaseline). */
+export async function snapshotInterface() {
+    return request("/api/interface/snapshot", { method: "POST" });
+}
+
+/** Compare live vs baseline and report (or apply) the rollback.
+ * DRY-RUN by default; send apply:true to actually restore. */
+export async function restoreInterface({ baseline = "", apply = false, dryRun = true } = {}) {
+    return request("/api/interface/restore", {
+        method: "POST",
+        body: JSON.stringify({ baseline, apply, dryRun }),
+    });
+}
+
+/** Execute one update-module function by string names. May return 403 when
+ * module execution is disabled (see setRunEnabled). */
+export async function runInterface({ domain, module, function: fn, args = [], kwargs = {} }) {
+    return request("/api/interface/run", {
+        method: "POST",
+        body: JSON.stringify({ domain, module, function: fn, args, kwargs }),
+    });
+}
+
+/** Arm/disarm /api/interface/run for the current server process. */
+export async function setRunEnabled(enabled) {
+    return request("/api/interface/toggle-run", {
+        method: "POST",
+        body: JSON.stringify({ enabled }),
+    });
+}
+
 /**
  * One agent's consolidated config for the settings page:
  * { agent, meta, markdown, tests, sharedTests }.

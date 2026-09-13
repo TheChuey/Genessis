@@ -57,6 +57,66 @@ venv\Scripts\python -m uvicorn server.server:app --host 127.0.0.1 --port 8000
 
 Open **http://127.0.0.1:8000** (Chrome/Edge).
 
+## Running on Linux / macOS / ChromeOS (Chromebook)
+
+The app is cross-platform - the same folder runs on Windows, Linux and macOS.
+On a Chromebook, use the **Linux container** (`Settings -> Developers -> Linux
+development environment`), then install Python and the venv module once:
+
+```sh
+sudo apt update && sudo apt install -y python3 python3-venv python3-pip
+```
+
+Then, in the project folder:
+
+```sh
+python3 -m venv venv
+source venv/bin/activate          # Linux/macOS (Windows: venv\Scripts\Activate.ps1)
+python -m pip install -r requirements.txt
+python server.py
+```
+
+That is it - no path configuration is required. By default everything is saved
+under the project's own `data/` folder (chat transcripts, the chat log, the RAG
+store, exports, history). If you need Ollama too, follow its Linux install
+(`curl -fsSL https://ollama.com/install.sh | sh` on Linux/Chromebook).
+
+> Tip: `python server.py` can be started from ANY directory - it bootstraps
+> `sys.path` itself. Port override: `PORT=9000 python server.py` (Unix) or
+> `$env:PORT=9000; python server.py` (PowerShell).
+
+## Changing where data is saved
+
+All runtime storage (chat transcripts, the chat log, history, exports and the
+RAG store) is controlled by **three path settings** resolved by
+`server/paths.py`: `dataDir`, `chatSavePath`, `ragDbPath`. From highest to
+lowest precedence:
+
+1. **Environment variables** - the most portable option for a second machine /
+   Chromebook. Set them before launching (e.g. in `~/.bashrc` or a `run.sh`):
+
+   ```sh
+   export GENESSIS_DATA_DIR="$HOME/genessis-data"        # instead of /dataDir
+   export GENESSIS_CHAT_SAVE_PATH="$HOME/genessis-chats" # instead of /chatSavePath
+   export GENESSIS_RAG_DB_PATH="$HOME/genessis-rag"      # instead of /ragDbPath
+   ```
+
+   `~` and `$VAR` are expanded, so `~/genessis-data` works too. Blank env vars
+   are ignored.
+
+2. **The Settings page** (`Config -> App defaults -> Data folder / Chat save
+   path / RAG database path`), stored in `dashboard/config/app_settings.json`.
+   Path changes need a server restart (the page shows a banner until you do).
+   When you save, any path that is a **Windows absolute path** (`E:\...`,
+   `\\server\share`) is automatically cleared back to the default so the
+   settings file stays portable - a confirmation window lists what was reset.
+
+3. **Defaults** - project-relative `<project>/data` (empty settings).
+
+If you copy the app between machines, either leave the path fields empty (the
+default `data/` folder travels with the project) or pin them via the
+`GENESSIS_*` env vars. Saved files are never in the way: `data/` is gitignored.
+
 ## Folder structure
 
 ```
@@ -114,24 +174,40 @@ terminator1/
 │       ├── classes/          # chat-window.js (widget UI), ChatSession.js (state)
 │       ├── logic/            # models.js (model dropdown), chat-formatter.js
 │       └── ui/               # markdown.js, appearance.js, config-form.js,
-│                             # agents.js, agent-editor.js, header-nav.js
+│                             # agents.js, agent-editor.js, header-nav.js,
+│                             # interface-indicator.js, interface-manager.js
 │
 ├── scripts/                  # CLI utilities
 │   ├── rebuild_rag.py        # python scripts/rebuild_rag.py [build|purge|status]
-│   └── version_chats.py      # list | import | bump | versioning on|off
+│   ├── version_chats.py      # list | import | bump | versioning on|off
+│   └── update_docs.py        # Regenerates APP_STRUCTURE.md + APP_CODE_SNAPSHOT.md
+│
+├── interface/                # Modular update & restore layer (no core edits needed)
+│   ├── update_manager.py     # Discover/import interface/updates/<domain>/*.py
+│   │                         # get_active_module() + move_module_to_external_archive()
+│   ├── interface_dispatcher.py  # trace_and_execute(): logs caller file+line
+│   ├── restore_manager.py    # Baseline compare/restore + snapshot_baseline()
+│   └── updates/              # Active update modules, grouped by domain
+│       ├── engine/           # e.g. hello_update.py, newfunction.py (examples)
+│       ├── tools/
+│       └── server/
 │
 ├── about/                    # Site identity
 │   ├── about.json            # title + subtitle served by GET /api/about
-│   └── set_title.py          # Updates about.json.
+│   └── set_title.py          # Edits about.json + 'apply'/'snapshot'/'restore' triggers
 │
 ├── config/
 │   └── models.json           # AUTO-GENERATED at startup from installed Ollama models
 ├── docs/
-│   ├── CHANGELOG.md          # Every recent change (incl. the Agent Monitor removal)
+│   ├── CHANGELOG.md          # Every recent change
 │   ├── RESTRUCTURE_README.md # History of the current package layout
-│   └── documentation_CREATING_AGENTS.md  # Agent authoring guide
-├── test/                     # PRE-INFECTION original snapshot, kept as a recovery
-│                             # reference (not part of the running app).
+│   ├── 01_IDEA_AND_ARCHITECTURE.md       # Modular Interface architecture design
+│   ├── APP_STRUCTURE.md      # AUTO-GENERATED folder-tree snapshot
+│   └── APP_CODE_SNAPSHOT.md  # AUTO-GENERATED per-file source snapshot
+├── current-known-good-copy/  # GENERATED restore baseline: complete copy of the
+│                             # last good source (python about/set_title.py snapshot)
+├── data/                     # RUNTIME data (gitignored): chatlog, RAG store,
+│                             # interface_archive/, snapshots/pre_restore_backup/
 ├── requirements.txt
 └── README.md
 ```
@@ -196,6 +272,12 @@ Agent modes:
 | `GET /api/agents/{id}/config` | One agent's consolidated config (meta + `agent.md` + tests + shared tests) |
 | `PUT /api/agents/{id}/config` | Partial update of one agent's config (`meta` / `markdown` / `tests`) |
 | `GET /api/about` | Site identity (title + tagline from `about/about.json`) |
+| `GET /api/interface/status` | Interface status: module catalog, archive, trace-log tail, baseline + drift |
+| `POST /api/interface/apply` | Reload update modules from disk + regenerate the docs snapshots |
+| `POST /api/interface/snapshot` | Publish the current tree as the new known-good baseline |
+| `POST /api/interface/restore` | `{baseline?, apply?, dryRun?}` — roll back (dry-run by default) |
+| `POST /api/interface/run` | Execute an update-module function (`{domain, module, function, args?, kwargs?}`) |
+| `POST /api/interface/toggle-run` | `{enabled}` — arm/disarm module execution for the process |
 | `POST /api/chat` | `{message, model, agent_id, history, session_id?, title?, new_chat?, rag?}` → `{reply, session_id, title}` |
 | `GET /api/chats` | Chat log + the active chat (feeds the chats drop-down) |
 | `GET /api/chats/{id}` | One chat: log row + `.txt` content + parsed messages |
@@ -250,7 +332,9 @@ refresh — the agent appears automatically in `GET /api/agents` and the fronten
 selector.
 
 Full field reference, tool catalog, copy-paste example, and troubleshooting:
-**[docs/documentation_CREATING_AGENTS.md](docs/documentation_CREATING_AGENTS.md)**
+see **`docs/CHANGELOG.md`** and `docs/01_IDEA_AND_ARCHITECTURE.md` for the
+project history and architecture (the older `docs/documentation_CREATING_AGENTS.md`
+guide was removed).
 
 ## Adding a new tool
 
@@ -259,19 +343,73 @@ Full field reference, tool catalog, copy-paste example, and troubleshooting:
 2. Add one line to `TOOL_REGISTRY` in `tools/registry.py`.
 3. Reference the ID in any agent's `agent.json`.
 
+## Modular interface: add / apply / snapshot / restore
+
+New or experimental logic can live outside the core modules under
+`interface/updates/<domain>/` (domains: `engine`, `tools`, `server`). Nothing
+in the core app is edited.
+
+- **Add a feature**: drop a `.py` file in `interface/updates/<domain>/`, then
+  `python about/set_title.py apply` — it is discovered, imported, and the
+  docs snapshots are regenerated. `apply --snapshot` also refreshes the
+  baseline.
+- **Use it natively (Option B)**:
+  ```python
+  from interface.update_manager import UpdateManager
+  mod = UpdateManager().get_active_module("engine", "newfunction")
+  mod.execute_new_logic("Input Data")
+  ```
+  or wrapped with caller tracing (logs `file:line -> module.function` to
+  `data/interface_trace.log`):
+  ```python
+  from interface.interface_dispatcher import InterfaceDispatcher
+  InterfaceDispatcher().trace_and_execute(mod.run_example)
+  InterfaceDispatcher().execute_action("engine", "newfunction",
+                                       "secondary_engine_action", 5)
+  ```
+  The server discovers update modules and builds both managers at startup,
+  exposed on `app.state.update_manager` / `app.state.interface_dispatcher`.
+- **Retire a module**: `UpdateManager().move_module_to_external_archive("engine", "hello_update")`
+  moves the file out of the repo into `data/interface_archive/engine/`.
+- **Re-baseline**: `python about/set_title.py snapshot` publishes a complete
+  working copy of the current source into `current-known-good-copy/`.
+- **Roll back**: `python about/set_title.py restore --dry-run` previews, then
+  `python about/set_title.py restore` overwrites any file whose SHA-256
+  differs from the baseline (files only in the baseline or only in the live
+  tree are reported, never copied/deleted). Overwritten files are first
+  copied to `data/snapshots/pre_restore_backup/`. User data (`data/`,
+  `venv/`, `.git/`, `dashboard/config/app_settings.json`, `about/about.json`)
+  is never touched, and the docs snapshots are regenerated afterwards.
+
+Design reference: `docs/01_IDEA_AND_ARCHITECTURE.md`.
+
+### In the browser
+
+The Settings page (`Dashboard -> Settings`) has an **Updates / Interface**
+card below Models: live module catalog, archive, baseline freshness + drift,
+the trace-log tail, and Apply / Snapshot / Restore buttons (restore is dry-run
+first). A small **"N updates" pill** also sits in the page header (amber dot
+when the baseline has drifted) and links back to that card.
+
+Module execution from the UI is **disabled by default**: the card's
+"Enable module execution" toggle arms `/api/interface/run` (backed server-side
+by `INTERFACE_RUN_ENABLED`, flipped via `/api/interface/toggle-run`). On by
+your own risk — it runs arbitrary functions from `interface/updates/`.
+
 ## Recent changes
 
 See **[docs/CHANGELOG.md](docs/CHANGELOG.md)** for the full history. The most
-recent entry (2026-09-12) removed the Agent Monitor feature, restored
-`engine/core/agent.py` and `server/server.py` to their working originals,
-re-added the Settings-page endpoints (`/api/tools`,
-`/api/agents/{id}/config`, `/api/about`), and made `python server.py` runnable
-from any directory.
+recent entry covers the cross-platform path system (`GENESSIS_*` env overrides,
+automatic Windows-path handling on Linux/macOS/Chromebook) plus the "Settings
+saved" response window. Earlier entries cover the Modular Interface wiring
+(`/api/interface/*` + the Settings card), the Agent Monitor removal, and the
+recovery of `engine/core/agent.py` + `server/server.py` to their working
+originals.
 
 Recovery artifacts to be aware of:
 
-- `test/` — a pre-infection snapshot of the original app, kept as a reference.
-  Not part of the running app.
+- `current-known-good-copy/` — the generated restore baseline (see the Modular
+  Interface section above). Not part of the running app.
 - `server/server.py.infected.bak` and `engine/core/agent.py.infected.bak` —
   copies of the pre-rollback monitor-era files, kept in case you need to
   diff/inspect them.

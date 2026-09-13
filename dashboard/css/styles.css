@@ -314,6 +314,51 @@ code {
     color: #1e293b;
 }
 
+/* Interface pill - the small "N update modules" chip in the page header.
+   Links to the Updates / Interface card on the Settings page. */
+.interface-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-text-soft);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color .15s ease, color .15s ease;
+}
+.interface-indicator:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent-strong);
+    text-decoration: none;
+}
+.interface-indicator .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-accent, #0b6bcb);
+    box-shadow: 0 0 0 3px rgba(11, 107, 203, 0.15);
+}
+.interface-indicator .dot.drift {
+    background: #d97706;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+}
+.mesh .interface-indicator,
+.app-header-nav.on-mesh + .interface-indicator,
+.interface-indicator.on-mesh {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+.interface-indicator .run-state {
+    font-weight: 400;
+    opacity: .75;
+}
+
 @media (max-width: 640px) {
     .app-header-row {
         flex-direction: column;

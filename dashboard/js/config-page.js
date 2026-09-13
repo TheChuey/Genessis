@@ -9,11 +9,13 @@
 //   Models         -> read-only snapshot from /api/models
 // ==========================================
 
-import { getModels, getAgents, getTools, loadAppSettingsWithMeta, saveAppSettings } from "./api/api.js";
+import { getModels, getAgents, getTools, getAbout, loadAppSettingsWithMeta, saveAppSettings } from "./api/api.js";
 import { buildConfigForm } from "./ui/config-form.js";
 import { applyAppearance, renderAppearance } from "./ui/appearance.js";
 import { renderAgentEditors } from "./ui/agent-editor.js";
 import { renderHeaderNav } from "./ui/header-nav.js";
+import { renderInterfaceSection } from "./ui/interface-manager.js";
+import { renderInterfaceIndicator } from "./ui/interface-indicator.js";
 
 let settings = {};
 let agents = [];
@@ -28,6 +30,16 @@ async function boot() {
     if (navSlot) {
         navSlot.replaceChildren(renderHeaderNav("config"));
     }
+
+    // Phone-home title: browser-tab + a small interface pill in the header
+    // (both fail-soft; a stale /api/about or /api/interface/* keeps defaults).
+    try {
+        const about = await getAbout();
+        const cleanSub = (about.subtitle && about.subtitle.trim())
+            ? " \u2014 " + about.subtitle.trim() : "";
+        document.title = (about.title || "Configuration") + cleanSub;
+    } catch (_) { /* keep the static <title> */ }
+    renderInterfaceIndicator({ container: document.querySelector(".cfg-nav") });
 
     const mount = document.getElementById("config-section");
     const statusEl = el("div", "status-message");
@@ -88,15 +100,40 @@ async function boot() {
     save.type = "button";
     actions.appendChild(save);
     mount.appendChild(actions);
+
+    // Prominent "Settings saved" response window that appears after saving.
+    const saveResponse = el("div", "save-response", "");
+    saveResponse.hidden = true;
+    mount.appendChild(saveResponse);
     mount.appendChild(statusEl);
 
     save.addEventListener("click", async () => {
         const payload = form.values();
         save.disabled = true;
+        saveResponse.hidden = true;
         try {
-            settings = await saveAppSettings(payload);
+            const saved = await saveAppSettings(payload);
+            settings = saved.settings;
             statusEl.textContent = "Settings saved.";
             statusEl.className = "status-message ok";
+
+            // Response window: confirm + list any path fields that were
+            // cleared because they held non-portable Windows absolute paths.
+            saveResponse.replaceChildren();
+            saveResponse.hidden = false;
+            saveResponse.appendChild(el("strong", "", "Settings saved \u2713"));
+            const detail = el("ul", "save-response-detail", "");
+            const normalized = saved.normalized && saved.normalized.length ? saved.normalized : [];
+            normalized.forEach((key) => {
+                const label = { dataDir: "Data folder", chatSavePath: "Chat save path", ragDbPath: "RAG database path" }[key] || key;
+                detail.appendChild(el("li", "", label +
+                    " held a Windows path (e.g. E:\\data\\...) and was cleared \u2014 the default project-relative folder now applies. " +
+                    "Restart the server to move the data folders."));
+            });
+            if (!normalized.length) {
+                detail.appendChild(el("li", "", "All path settings are portable."));
+            }
+            saveResponse.appendChild(detail);
         } catch (error) {
             statusEl.textContent = error.message;
             statusEl.className = "status-message error";
@@ -129,6 +166,9 @@ async function boot() {
 
     // ---- Models (read-only) ----
     renderModels(document.getElementById("models-section"), models);
+
+    // ---- Updates / Interface (modular update system) ----
+    await renderInterfaceSection(document.getElementById("interface-section"));
 }
 
 function renderFailureBanner(failures) {
