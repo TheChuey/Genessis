@@ -9,14 +9,6 @@
 //      in its header. Clicking an agent card also switches + expands it.
 //      The ChatWindow ONLY renders; all AI/session/persist logic lives here.
 //   (All configuration/settings now live on /static/config.html.)
-//
-// FOLDER MAP:
-//   js/app.js                        -> boot + wiring (this file)
-//   js/logic/                        -> pure logic (models, chat-formatter)
-//   js/classes/ChatSession.js        -> chat data model (no DOM)
-//   js/classes/chat-window.js        -> reusable flyout chat engine
-//   js/api/                          -> every server call (api.js)
-//   js/ui/                           -> agents, markdown, appearance (+ config-page)
 
 import { renderAgents } from "./ui/agents.js";
 import { applyAppearance } from "./ui/appearance.js";
@@ -53,8 +45,6 @@ async function boot() {
     applyAppearance(settings);
 
     // 0b. Header: shared nav + the editable H1/tagline from about/about.json.
-    //     Fail-soft - a stale server or missing /api/about keeps the defaults
-    //     already written into the HTML.
     const navSlot = document.getElementById("app-nav");
     if (navSlot) {
         navSlot.replaceChildren(renderHeaderNav("dashboard"));
@@ -66,12 +56,14 @@ async function boot() {
         /* keep the hardcoded defaults */
     }
 
-    // 0c. Interface pill: "N update modules" in the header (hidden on servers
-    //     without /api/interface/* or when nothing is loaded).
+    // 0c. Interface pill: "N update modules" in the header
     renderInterfaceIndicator({
         container: document.querySelector(".app-header-row"),
         onMesh: true,
     });
+
+    // 0d. Wire "New Project" button trigger
+    wireNewProjectButton();
 
     // 1. Render agent cards (returns the full agent list).
     agents = await renderAgents({
@@ -81,17 +73,12 @@ async function boot() {
     });
 
     // 2. Create the persistent corner widget for the first agent (if any).
-    //    (The old inline config panel moved to /static/config.html - see the
-    //    "Settings" link in the header.)
-
-    // 3. Create the persistent corner widget for the first agent (if any).
     if (agents.length > 0) {
         buildWidget();
     }
 }
 
-/** Update the header H1 + tagline (fall back to the current text when a
- *  value is empty). Directly driven by about/about.json on the server. */
+/** Update the header H1 + tagline */
 function setPageTitle(title, subtitle) {
     const titleEl = document.getElementById("app-title");
     const taglineEl = document.getElementById("app-tagline");
@@ -101,9 +88,46 @@ function setPageTitle(title, subtitle) {
     if (taglineEl && subtitle && subtitle.trim()) {
         taglineEl.textContent = subtitle.trim();
     }
-    // Browser-tab title: "Genessis - <subtitle>" (falls back to the raw title).
     const cleanSub = (subtitle && subtitle.trim()) ? " \u2014 " + subtitle.trim() : "";
     document.title = ((title && title.trim()) ? title.trim() : "") + cleanSub;
+}
+
+/** Wire the "New Project" header button to prompt and call API */
+function wireNewProjectButton() {
+    const btnNewProject = document.getElementById("btn-new-project");
+    if (!btnNewProject) return;
+
+    btnNewProject.addEventListener("click", async () => {
+        const projectName = window.prompt("Enter new project name:", "MyNewProject");
+        if (!projectName || !projectName.trim()) return;
+
+        btnNewProject.disabled = true;
+        const origText = btnNewProject.textContent;
+        btnNewProject.textContent = "Creating...";
+
+        try {
+            const currentSettings = await api.loadAppSettings();
+            const basePath = currentSettings.defaultProjectsPath || "C:\\Projects";
+            const cleanBase = basePath.replace(/[\\/]+$/, "");
+            const targetDir = `${cleanBase}\\${projectName.trim()}`;
+
+            const res = await api.createProject({
+                projectName: projectName.trim(),
+                targetDir: targetDir,
+            });
+
+            if (res.status === "success") {
+                alert(`Project '${res.project_name}' created successfully at:\n${res.path}`);
+            } else {
+                alert(`Error creating project: ${res.message || "Unknown error"}`);
+            }
+        } catch (err) {
+            alert(`Failed to create project: ${err.message}`);
+        } finally {
+            btnNewProject.disabled = false;
+            btnNewProject.textContent = origText;
+        }
+    });
 }
 
 /** Create the single persistent flyout widget + wire its agent switcher. */
@@ -177,8 +201,6 @@ function switchToAgent(agent, autoHi = true) {
 
 /**
  * Ensure a ChatSession exists for the agent and load it into the widget.
- * The auto-"say hi" fires only the first time we meet this agent, and only
- * once the widget is expanded so the injected message can be sent.
  */
 function selectSession(agent, autoHi = false) {
     let session = agentSessions.get(agent.id);
@@ -194,9 +216,6 @@ function selectSession(agent, autoHi = false) {
     activeAgentId = agent.id;
 
     if (created && autoHi && widget && widget.isOpen && widget.getPanelValues().autoHi === true) {
-        // Prefill "hi" so the chat starts itself after you've named it (the
-        // "Chat title" field in the panel). No auto-send: you get a chance
-        // to title the chat first.
         widget.setInputValue(AUTO_HI_TEXT);
         widget._input?.focus();
     }
@@ -205,8 +224,6 @@ function selectSession(agent, autoHi = false) {
 
 /**
  * The entity config that drives the chat window for one AI agent.
- * The right panel is generated fully from `sections` - no HTML edits
- * needed to change an agent's controls/branding.
  */
 function buildAgentConfig(agent) {
     const commitOnSave =
@@ -268,7 +285,7 @@ function buildAgentConfig(agent) {
     };
 }
 
-// ---- send flow (the ChatWindow already showed the user bubble) ----
+// ---- send flow ----
 async function handleSend(session, chat, text) {
     session.addUserMessage(text);
     chat.setWaiting(true);
@@ -304,15 +321,6 @@ async function handleSend(session, chat, text) {
 }
 
 // ---- save handlers ----
-/**
- * "Save chat" action: finalize the active chat on the server. The server
- * writes the transcript to data/chatlog/agent-text-records/<title>[-v].txt and
- * logs it. If you keep chatting after saving, the next save writes the next
- * version.
- *
- * If no subject was set in the panel, prompt for one so every chat ends up
- * meaningfully named (works the same for every agent).
- */
 async function handleSaveAction(session, chat) {
     if (!session || !session.sessionId) {
         chat.setSaveStatus("No active chat to save yet.", "error");
@@ -348,7 +356,6 @@ async function handleSaveAction(session, chat) {
     }
 }
 
-/** "Clear chat" action: wipe the session data and the rendered bubbles. */
 function handleClearAction(session, chat) {
     session.newChat();
     chat.clearMessages();

@@ -1,6 +1,6 @@
 # Terminator1 — App Code Snapshot
 
-_Auto-generated on 2026-09-12T18:28:23 by `scripts/update_docs.py`._
+_Auto-generated on 2026-09-12T21:27:02 by `scripts/update_docs.py`._
 
 
 ## README.md
@@ -12799,7 +12799,7 @@ def secondary_engine_action(value: int):
 ```markdown
 # Terminator1 — App Structure
 
-_Auto-generated on 2026-09-12T18:28:23 by `scripts/update_docs.py`._
+_Auto-generated on 2026-09-12T21:27:02 by `scripts/update_docs.py`._
 
 
 ```
@@ -12872,9 +12872,11 @@ Genesisis by Claud/
 |   |   |-- engine
 |   |   |   |-- __init__.py
 |   |   |   |-- hello_update.py
-|   |   |   `-- newfunction.py
+|   |   |   |-- newfunction.py
+|   |   |   `-- project_creator.py
 |   |   |-- server
-|   |   |   `-- __init__.py
+|   |   |   |-- __init__.py
+|   |   |   `-- project_routes.py
 |   |   |-- tools
 |   |   |   `-- __init__.py
 |   |   `-- __init__.py
@@ -12909,7 +12911,7 @@ Genesisis by Claud/
 `-- requirements.txt
 ```
 
-_74 tracked source file(s)._
+_76 tracked source file(s)._
 
 ```
 
@@ -15697,12 +15699,172 @@ def secondary_engine_action(value: int):
     return value * 10
 ```
 
+## interface/updates/engine/project_creator.py
+
+```python
+"""Project creator module.
+
+LOCATION: interface/updates/engine/project_creator.py
+USAGE (Option B Direct Access):
+    mod = update_manager.get_active_module("engine", "project_creator")
+    result = mod.create_project("MyNewProject", "C:\\Projects\\MyNewProject")
+"""
+
+import sys
+import venv
+import subprocess
+from pathlib import Path
+import logging
+
+logger = logging.getLogger("app_change_tracker")
+
+# Standard workspace folder layout
+STANDARD_FOLDERS = [
+    "config",
+    "server",
+    "dashboard",
+    "modules",
+    "project_scope",
+    "to_do",
+    "updates",
+    "data",
+]
+
+DEFAULT_REQUIREMENTS = [
+    "fastapi",
+    "uvicorn",
+    "streamlit",
+]
+
+STARTER_SERVER_CODE = """from fastapi import FastAPI
+
+app = FastAPI(title="Project Server")
+
+@app.get("/")
+def read_root():
+    return {"status": "online", "message": "Project server running"}
+
+@app.get("/api/status")
+def get_status():
+    return {"status": "ready"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8500)
+"""
+
+STARTER_DASHBOARD_CODE = """import streamlit as st
+
+st.set_page_config(page_title="Project Dashboard", layout="wide")
+st.title("Project Dashboard")
+st.write("Welcome to your standalone project workspace!")
+
+st.header("Project Status")
+st.info("Server & Workspace Initialized")
+"""
+
+
+def get_venv_python(project_path: Path) -> Path:
+    """Returns the path to the Python executable in .venv based on OS."""
+    if sys.platform == "win32":
+        return project_path / ".venv" / "Scripts" / "python.exe"
+    return project_path / ".venv" / "bin" / "python"
+
+
+def create_project(project_name: str, target_dir: str, dependencies: list = None) -> dict:
+    """Creates a standalone project environment with standard folders, .venv, server, and dashboard."""
+    project_path = Path(target_dir).resolve()
+    logger.info(f"[PROJECT BUILDER] Creating project '{project_name}' at {project_path}")
+
+    # 1. Generate Standard Workspace Folders
+    project_path.mkdir(parents=True, exist_ok=True)
+    for folder in STANDARD_FOLDERS:
+        (project_path / folder).mkdir(parents=True, exist_ok=True)
+
+    # 2. Build Platform-Specific Virtual Environment
+    venv_dir = project_path / ".venv"
+    if not venv_dir.exists():
+        builder = venv.EnvBuilder(with_pip=True)
+        builder.create(venv_dir)
+
+    # 3. Write requirements.txt and install dependencies
+    req_list = dependencies or DEFAULT_REQUIREMENTS
+    req_file = project_path / "requirements.txt"
+    req_file.write_text("\n".join(req_list) + "\n", encoding="utf-8")
+
+    venv_python = get_venv_python(project_path)
+    subprocess.run(
+        [str(venv_python), "-m", "pip", "install", "-r", str(req_file)],
+        check=True,
+    )
+
+    # 4. Generate Starter Server & Dashboard
+    (project_path / "server" / "server.py").write_text(STARTER_SERVER_CODE, encoding="utf-8")
+    (project_path / "dashboard" / "app.py").write_text(STARTER_DASHBOARD_CODE, encoding="utf-8")
+
+    return {
+        "status": "success",
+        "project_name": project_name,
+        "path": str(project_path),
+        "venv_python": str(venv_python),
+    }
+```
+
 ## interface/updates/server/__init__.py
 
 ```python
 """Update modules that extend the server (server/)."""
 
 __all__: list[str] = []
+```
+
+## interface/updates/server/project_routes.py
+
+```python
+"""
+LOCATION: interface/updates/server/project_routes.py
+"""
+import os
+from pathlib import Path
+from pydantic import BaseModel
+from interface.update_manager import UpdateManager
+
+class CreateProjectRequest(BaseModel):
+    project_name: str
+    target_dir: str
+    dependencies: list[str] = None
+
+def register_routes(app):
+    """Registers project manager API endpoints onto the FastAPI app."""
+    
+    @app.post("/api/projects/create")
+    def api_create_project(req: CreateProjectRequest):
+        mgr = UpdateManager()
+        builder = mgr.get_active_module("engine", "project_creator")
+        if not builder:
+            return {"status": "error", "message": "project_creator module not found"}
+        
+        result = builder.create_project(
+            project_name=req.project_name,
+            target_dir=req.target_dir,
+            dependencies=req.dependencies
+        )
+        return result
+
+    @app.get("/api/projects/list")
+    def api_list_projects(base_dir: str = "C:\\Projects"):
+        """Lists created project folders at the target location."""
+        path = Path(base_dir)
+        if not path.exists():
+            return {"projects": []}
+        
+        projects = [
+            d.name for d in path.iterdir() 
+            if d.is_dir() and (d / "requirements.txt").exists()
+        ]
+        return {"base_dir": str(path), "projects": projects}
+
+
 ```
 
 ## interface/updates/tools/__init__.py
@@ -20041,4 +20203,4 @@ def search_chat_logs(query: str) -> str:
 
 ```
 
-_72 code file(s)._
+_74 code file(s)._

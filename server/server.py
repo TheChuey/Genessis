@@ -128,6 +128,11 @@ async def lifespan(app: FastAPI):
                           for d, n in sorted(interface_manager.active_modules_catalog.items())))
         app.state.update_manager = interface_manager
         app.state.interface_dispatcher = InterfaceDispatcher(interface_manager)
+        # Register update routes (Project Manager API) 
+        project_routes = interface_manager.get_active_module("server", "project_routes") 
+        if project_routes and hasattr(project_routes, "register_routes"): 
+            project_routes.register_routes(app) 
+            print("[interface] Registered project_routes endpoints")
     except Exception as exc:   # a broken update module must never block boot
         print(f"[interface] WARNING: update discovery failed: {exc}")
         app.state.update_manager = None

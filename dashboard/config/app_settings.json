@@ -15,7 +15,7 @@
     "enabled": true,
     "tests": []
   },
-  "dataDir": "",
+  "dataDir": "data",
   "dataDirLinux": "/home/goofy/data",
   "ragDbPath": "",
   "ragDbPathLinux": "/home/goofy/data/db",
@@ -31,5 +31,6 @@
     "messages": false,
     "maxLines": 800
   },
-  "dataDirWindows": ""
+  "dataDirWindows": "",
+  "defaultProjectsPath": "E:\\projects"
 }

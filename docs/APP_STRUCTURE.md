@@ -1,6 +1,6 @@
 # Terminator1 — App Structure
 
-_Auto-generated on 2026-09-12T18:28:23 by `scripts/update_docs.py`._
+_Auto-generated on 2026-09-12T21:27:02 by `scripts/update_docs.py`._
 
 
 ```
@@ -73,9 +73,11 @@ Genesisis by Claud/
 |   |   |-- engine
 |   |   |   |-- __init__.py
 |   |   |   |-- hello_update.py
-|   |   |   `-- newfunction.py
+|   |   |   |-- newfunction.py
+|   |   |   `-- project_creator.py
 |   |   |-- server
-|   |   |   `-- __init__.py
+|   |   |   |-- __init__.py
+|   |   |   `-- project_routes.py
 |   |   |-- tools
 |   |   |   `-- __init__.py
 |   |   `-- __init__.py
@@ -110,4 +112,4 @@ Genesisis by Claud/
 `-- requirements.txt
 ```
 
-_74 tracked source file(s)._
+_76 tracked source file(s)._

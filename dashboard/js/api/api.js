@@ -3,16 +3,7 @@
 // ==========================================
 // Every HTTP request in the app goes through this module. No other
 // file is allowed to call fetch() directly.
-//
-// ENDPOINTS USED:
-//   getModels()            -> GET  /api/models
-//   getAgents()            -> GET  /api/agents
-//   sendChat(...)          -> POST /api/chat
-//   loadAppSettings()      -> GET  /api/settings
-//   saveAppSettings(...)   -> POST /api/settings   (merges)
-//   saveChatSession(...)   -> POST /api/chat-save  (writes .txt file)
 
-// "" (default) -> requests go to the SAME origin serving this page.
 const API_BASE_URL = "";
 
 /**
@@ -127,11 +118,6 @@ export async function saveAgentConfig(agentId, partialConfig) {
 
 /**
  * Send one chat message and return the server's reply + the tracked session.
- *
- * The server now owns the conversation: it returns a session_id you must send
- * back on every later message so the same chat keeps its own start/middle/end.
- * Pass newChat=true (or leave session_id empty) to start a fresh chat, which
- * finalizes whatever chat was active before.
  */
 export async function sendChat({ message, agentId = "", model = "", history = [], sessionId = "", title = "", newChat = false, rag = false }) {
     const data = await request("/api/chat", {
@@ -164,7 +150,6 @@ export async function getChat(chatId) {
 /**
  * Finalize the active chat: writes its .txt (next version on a name collision)
  * and logs it. Safe to call even when nothing is active.
- * rag: optional bool override - commit this chat to the RAG memory store.
  */
 export async function endChat({ title = "", rag = undefined } = {}) {
     const body = { title };
@@ -200,17 +185,12 @@ export async function loadAppSettings() {
 
 /**
  * Load settings plus the meta flags from /api/settings.
- * Returns { settings, restartNeeded, platform } where restartNeeded is true
- * when the stored path settings changed since the server started (restart
- * required) and platform is "win", "linux" or "mac" (which path fields to
- * highlight).
  */
 export async function loadAppSettingsWithMeta() {
     const data = await request("/api/settings");
     return {
         settings: data.settings || {},
         restartNeeded: Boolean(data.restartNeeded),
-        platform: data.platform || "nix",
     };
 }
 
@@ -220,14 +200,11 @@ export async function saveAppSettings(partialSettings) {
         method: "POST",
         body: JSON.stringify(partialSettings),
     });
-    return data;
+    return data.settings || {};
 }
 
 /**
  * Save a chat session as a nicely-formatted .txt file on the server.
- *
- * The transcript + a suggested file name + the configured output path
- * are all sent here and written by /api/chat-save.
  */
 export async function saveChatSession({
     path = "",
@@ -246,5 +223,25 @@ export async function saveChatSession({
         throw new Error(result.error || "The server refused to save the chat.");
     }
 
-    return result; // { saved, file }
+    return result;
+}
+
+// ---------------------------------------------------------------- project manager
+
+/** Trigger creation of a new standalone project workspace */
+export async function createProject({ projectName, targetDir, dependencies }) {
+    return request("/api/projects/create", {
+        method: "POST",
+        body: JSON.stringify({
+            project_name: projectName,
+            target_dir: targetDir,
+            dependencies: dependencies,
+        }),
+    });
+}
+
+/** List created projects at target directory */
+export async function listProjects(baseDir) {
+    const query = baseDir ? `?base_dir=${encodeURIComponent(baseDir)}` : "";
+    return request(`/api/projects/list${query}`);
 }
